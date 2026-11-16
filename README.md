@@ -22,6 +22,10 @@ derived from the resulting height map, and everything can be inspected live on a
 Inspired by Substance 3D Sampler, Materialize and Quixel Mixer, but deliberately
 simpler: one material, one window.
 
+<p align="center">
+  <img src="docs/media/app-window.png" alt="PBRCELAIN main window on macOS: material slots and map settings on the left, 3D viewport on the right" width="760">
+</p>
+
 ## Showcase
 
 Materials generated from single photos, previewed in the built-in 3D viewport
