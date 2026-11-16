@@ -19,13 +19,11 @@ class AOPanel(GeneratePropertiesContainer):
 
         self.note_label = QLabel(
             "No Height map yet, so Generate Map has nothing to work from "
-            "(you can still upload an Ambient Occlusion map directly instead)."
+            "(you can still import an Ambient Occlusion map directly instead)."
         )
         self.note_label.setWordWrap(True)
         self.note_label.setProperty("role", "dim")
         self.generate_page.add_wide(self.note_label)
-
-        self.generate_page.add_section("Method")
 
         self.method_combo = QComboBox()
         self.method_combo.addItem("Ray-traced (accurate)", AO_METHOD_RAYTRACED)
@@ -38,7 +36,7 @@ class AOPanel(GeneratePropertiesContainer):
         )
         self.method_combo.currentIndexChanged.connect(self._on_method_changed)
         self.method_combo.currentIndexChanged.connect(self.propertiesChanged.emit)
-        self.generate_page.add_param("AO method", self.method_combo)
+        self.generate_page.add_param("AO method", self.method_combo, wide=True)
 
         self.generate_page.add_section("Real-World Scale")
 
@@ -93,6 +91,7 @@ class AOPanel(GeneratePropertiesContainer):
 
         reset_gen_btn = QPushButton("Reset Generate Defaults")
         reset_gen_btn.clicked.connect(self.reset_generate_defaults)
+        self.generate_page.end_section()
         self.generate_page.add_wide(reset_gen_btn)
         self.generate_page.add_stretch()
 
@@ -137,6 +136,7 @@ class AOPanel(GeneratePropertiesContainer):
 
         reset_btn = QPushButton("Reset to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)
+        page.end_section()
         page.add_wide(reset_btn)
         page.add_stretch()
 

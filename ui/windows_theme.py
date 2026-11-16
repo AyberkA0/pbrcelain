@@ -397,8 +397,8 @@ QPushButton[role="brush-preset"] {{
 QPushButton[role="slot-btn"] {{
     font-size: 11px;
     font-weight: 600;
-    min-height: 40px;
-    padding: 6px 2px;
+    min-height: 20px;
+    padding: 3px 2px;
 }}
 
 QPushButton[role="slot-btn"]:!checked {{

@@ -6,11 +6,12 @@ from typing import Optional
 
 import numpy as np
 from PIL import Image
-from PyQt6.QtCore import QSettings, QSize, QTimer, Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QKeySequence, QImage, QPixmap
+from PyQt6.QtCore import QEvent, QSettings, QSize, QTimer, Qt
+from PyQt6.QtGui import QAction, QColor, QKeySequence, QImage, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -57,7 +58,8 @@ from ui.progress_dialog import OperationProgressDialog
 from ui import mac_window, window_layout
 from ui.theme import IS_MAC, IS_WINDOWS, PLATFORM_THEME, legacy_style, pick, theme_changed
 from ui.tiled_preview_dialog import TiledPreviewDialog
-from ui.widgets import IMAGE_EXTENSIONS, ImageLabel, SlotButton
+from ui.icons import status_dot, themed_icon
+from ui.widgets import IMAGE_EXTENSIONS, ImageLabel, SlotButton, ToggleHeading
 from ui.workers import (
     ExportWorker,
     InferenceWorker,
@@ -109,36 +111,10 @@ def _heading(text: str) -> str:
 
 
 _VIEW_OPTIONS_EXPANDED_KEY = "window/viewOptionsExpanded"
-QWIDGETSIZE_MAX = 16777215
-
-
-class _ToggleHeading(QLabel):
-    toggled = pyqtSignal(bool)
-
-    def __init__(self, title: str, parent=None):
-        super().__init__(parent)
-        self._title = title
-        self._expanded = True
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._refresh()
-
-    def is_expanded(self) -> bool:
-        return self._expanded
-
-    def set_expanded(self, expanded: bool) -> None:
-        if expanded == self._expanded:
-            return
-        self._expanded = expanded
-        self._refresh()
-        self.toggled.emit(expanded)
-
-    def _refresh(self) -> None:
-        self.setText(("\u25be  " if self._expanded else "\u25b8  ") + self._title)
-
-    def mouseReleaseEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
-            self.set_expanded(not self._expanded)
-        super().mouseReleaseEvent(event)
+_VIEW_OPTIONS_MARGIN = 12
+_VIEW_OPTIONS_HEIGHT = 300
+_VIEW_OPTIONS_WIDTH = 684
+_VIEW_OPTIONS_MAX_WIDTH = 684
 
 
 class MainWindow(QMainWindow):
@@ -338,26 +314,38 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        selector = self._build_map_selector()
+
         if IS_MAC:
             title_space = QWidget()
+            title_space.setObjectName("TitleBarSpace")
+            title_space.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
             title_space.setFixedHeight(mac_window.TITLE_BAR_HEIGHT)
             mac_window.install_drag_area(title_space)
             layout.addWidget(title_space)
 
-        heading = QLabel(_heading("MATERIAL SLOTS"))
-        heading.setProperty("role", "panel-heading")
-        layout.addWidget(heading)
+        strip = QFrame()
+        strip.setObjectName("SlotStrip")
+        strip.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        strip_layout = QVBoxLayout(strip)
+        strip_layout.setContentsMargins(0, 0, 0, 0)
+        strip_layout.setSpacing(0)
+        slots_host = QWidget()
+        slots_host.setLayout(self._slots_bar_layout)
+        self._slots_bar_layout.setContentsMargins(*pick(mac=(14, 10, 14, 10), windows=(16, 12, 16, 10), legacy=(10, 8, 10, 8)))
+        strip_layout.addWidget(slots_host)
+        self._slot_strip = strip
+        self._style_slot_strip()
+        theme_changed.connect(self._style_slot_strip)
+        layout.addWidget(strip)
 
         inspector = QWidget()
         inspector.setObjectName("MapInspector")
         inspector_layout = QVBoxLayout(inspector)
-        inspector_layout.setContentsMargins(*pick(mac=(14, 6, 14, 10), windows=(16, 6, 16, 12), legacy=(10, 10, 10, 10)))
-        inspector_layout.addLayout(self._build_map_selector())
+        inspector_layout.setContentsMargins(*pick(mac=(14, 10, 14, 10), windows=(16, 10, 16, 12), legacy=(10, 10, 10, 10)))
+        inspector_layout.addLayout(selector)
         layout.addWidget(inspector)
 
-        properties_heading = QLabel(_heading("MAP SETTINGS"))
-        properties_heading.setProperty("role", "panel-heading")
-        layout.addWidget(properties_heading)
         layout.addWidget(self._build_dynamic_panel_host(), 1)
 
         controls = QWidget()
@@ -378,13 +366,13 @@ class MainWindow(QMainWindow):
             btn = SlotButton()
             btn.setProperty("role", "slot-btn")
             btn.setCheckable(True)
-            btn.setMinimumHeight(44)
-            btn.setToolTip(f"Click to select {MAP_TYPE_LABELS[map_type]}, double-click to open 2x2 Tiled Preview")
+            btn.setText(MAP_TYPE_LABELS[map_type])
+            btn.setIconSize(QSize(9, 9))
             btn.clicked.connect(lambda _checked=False, mt=map_type: self._select_map_type(mt))
             btn.doubleClicked.connect(lambda mt=map_type: (self._select_map_type(mt), self._open_tiled_preview(mt)))
             self._slot_buttons[map_type] = btn
             slots_bar.addWidget(btn)
-        col.addLayout(slots_bar)
+        self._slots_bar_layout = slots_bar
 
         row = QHBoxLayout()
         row.setSpacing(10)
@@ -402,38 +390,94 @@ class MainWindow(QMainWindow):
         self.active_slot_label = QLabel(MAP_TYPE_LABELS[MapType.ALBEDO])
         legacy_style(self.active_slot_label, "background-color: transparent; font-weight: bold; font-size: 13px; color: #ffffff;", "slot-title")
 
-        self.upload_btn = QPushButton("Upload Image")
+        self.slot_info_label = QLabel("")
+        self.slot_info_label.setProperty("role", "dim")
+        self.slot_info_label.setWordWrap(True)
+
+        self.upload_btn = QPushButton()
         self.upload_btn.clicked.connect(self._upload_image)
-
-        self.save_as_btn = QPushButton("Save Map As…")
+        self.save_as_btn = QPushButton()
         self.save_as_btn.clicked.connect(self._save_current_map_as)
-
-        self.remove_btn = QPushButton("Remove Image")
+        self.remove_btn = QPushButton()
         self.remove_btn.clicked.connect(self._remove_image)
 
+        self._slot_action_buttons = (
+            (self.upload_btn, "import", "Import", "Import an image file into the selected slot."),
+            (self.save_as_btn, "export", "Export", "Save the selected map as an image file."),
+            (self.remove_btn, "remove", "Remove", "Clear the selected slot's image."),
+        )
+        actions_col = QVBoxLayout()
+        actions_col.setSpacing(4)
+        for btn, _icon, name, description in self._slot_action_buttons:
+            btn.setToolTip(f"<b>{name}</b><br>{description}")
+            btn.setAccessibleName(name)
+            btn.setIconSize(QSize(16, 16))
+            btn.setStyleSheet("padding: 0px;")
+            btn.setFixedSize(30, 24)
+            actions_col.addWidget(btn, 0, Qt.AlignmentFlag.AlignLeft)
+        self._refresh_slot_action_icons()
+        theme_changed.connect(self._refresh_slot_action_icons)
+
         controls.addWidget(self.active_slot_label)
-        controls.addWidget(self.upload_btn)
-        controls.addWidget(self.save_as_btn)
-        controls.addWidget(self.remove_btn)
+        controls.addWidget(self.slot_info_label)
+        controls.addLayout(actions_col)
         controls.addStretch(1)
 
-        row.addLayout(controls)
+        row.addLayout(controls, 1)
         col.addLayout(row)
         return col
+
+    def _style_slot_strip(self) -> None:
+        if PLATFORM_THEME == "mac":
+            from ui import mac_theme
+
+            dark = mac_theme.is_dark()
+        elif PLATFORM_THEME == "windows":
+            from ui import windows_theme
+
+            dark = windows_theme.is_dark()
+        else:
+            dark = True
+        tint = "rgba(0, 0, 0, 0.08)" if dark else "rgba(0, 0, 0, 0.02)"
+        line = "rgba(255, 255, 255, 0.10)" if dark else "rgba(0, 0, 0, 0.12)"
+        self._slot_strip.setStyleSheet(
+            f"QFrame#SlotStrip {{ background-color: {tint}; border: none; border-bottom: 1px solid {line}; }}"
+        )
+
+    def _refresh_slot_action_icons(self) -> None:
+        for btn, icon, _name, _description in self._slot_action_buttons:
+            btn.setIcon(themed_icon(icon))
+
+    def _refresh_slot_info(self) -> None:
+        map_type = self.current_map_type
+        image = self._active_display_image(map_type)
+        if image is None:
+            self.slot_info_label.setText("Empty")
+            return
+        if map_type in self._draft_images:
+            state = "Draft"
+        elif map_type in self.generated_images:
+            state = "Generated"
+        else:
+            state = "Loaded"
+        self.slot_info_label.setText(f"{state}\n{image.width} \u00d7 {image.height} px")
 
     def _refresh_material_slots_bar(self) -> None:
         for map_type, btn in self._slot_buttons.items():
             btn.setChecked(map_type == self.current_map_type)
-            name = MAP_TYPE_LABELS[map_type]
             if map_type in self._draft_images:
-                status = "⚡ Draft"
+                state, color, filled = "Draft (unsaved adjustment)", "#f5a524", True
             elif map_type in self.generated_images:
-                status = "⚙ Gen"
+                state, color, filled = "Generated", "#30a46c", True
             elif map_type in self.source_images:
-                status = "● Loaded"
+                state, color, filled = "Loaded", "#3b82f6", True
             else:
-                status = "○ Empty"
-            btn.setText(f"{name}\n{status}")
+                state, color, filled = "Empty", "#8e8e93", False
+            btn.setIcon(status_dot(color, filled))
+            btn.setToolTip(
+                f"<b>{MAP_TYPE_LABELS[map_type]}</b> \u2014 {state}<br>"
+                "Click to select, double-click to open the 2x2 tiled preview."
+            )
 
     def _build_dynamic_panel_host(self) -> QWidget:
         host = QWidget()
@@ -461,7 +505,6 @@ class MainWindow(QMainWindow):
         self.height_panel.set_raw_source_provider(self._height_raw_source)
         self.roughness_panel.set_underlay_provider(self._roughness_underlays)
         self.height_panel.modelSettingsChanged.connect(self._on_model_settings_changed)
-        self.height_panel.loadModelRequested.connect(self._load_model)
         for map_type in MAP_TYPE_ORDER:
             self._panels_by_type[map_type].pageChanged.connect(self._on_panel_page_changed)
             self._panels_by_type[map_type].propertiesChanged.connect(self._schedule_properties_preview)
@@ -481,6 +524,7 @@ class MainWindow(QMainWindow):
         self.kill_btn = QPushButton("Kill Process")
         self.kill_btn.setProperty("role", "generate")
         self.kill_btn.setEnabled(False)
+        self.kill_btn.setVisible(False)
         self.kill_btn.clicked.connect(self._on_secondary_btn_clicked)
 
         btn_row.addWidget(self.generate_btn)
@@ -525,23 +569,25 @@ class MainWindow(QMainWindow):
         viewport_layout.addWidget(self.preview_3d)
         top_layout.addWidget(viewport, 1)
 
-        bottom_pane = QWidget()
-        bottom_layout = QVBoxLayout(bottom_pane)
-        bottom_layout.setContentsMargins(0, 0, 0, 0)
-        bottom_layout.setSpacing(0)
+        panel = QFrame(viewport)
+        panel.setObjectName("FloatingViewOptions")
+        panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(0)
+        self._view_options_panel = panel
+        self._viewport_frame = viewport
 
-        preview_heading = _ToggleHeading(_heading("VIEW OPTIONS"))
+        preview_heading = ToggleHeading(_heading("VIEW OPTIONS"))
         preview_heading.setProperty("role", "panel-heading")
         preview_heading.setToolTip("Click to show or hide the view options")
         preview_heading.toggled.connect(self._set_view_options_expanded)
         self._view_options_heading = preview_heading
-        self._view_options_pane = bottom_pane
-        self._view_options_sizes: Optional[list[int]] = None
-        bottom_layout.addWidget(preview_heading)
+        panel_layout.addWidget(preview_heading)
 
         self.preview_properties_panel = PreviewPropertiesPanel()
-        self.preview_properties_panel.setMinimumHeight(120)
         self.preview_properties_panel.settingsChanged.connect(self._on_preview_settings_changed)
+        self.preview_properties_panel.tabChanged.connect(self._layout_view_options_panel)
 
         self.preview_3d.distanceChanged.connect(self.preview_properties_panel.set_distance_value)
         self.preview_3d.lightChanged.connect(self.preview_properties_panel.set_light_values)
@@ -549,35 +595,68 @@ class MainWindow(QMainWindow):
         self.preview_3d.pivotChanged.connect(self.preview_properties_panel.set_pivot_values)
 
         self.preview_3d.set_preview_settings(self.preview_properties_panel.get_settings())
-        bottom_layout.addWidget(self.preview_properties_panel, 1)
+        panel_layout.addWidget(self.preview_properties_panel, 1)
+
+        self._style_view_options_panel()
+        theme_changed.connect(self._style_view_options_panel)
+        viewport.installEventFilter(self)
+        panel.raise_()
 
         splitter.addWidget(top_pane)
-        splitter.addWidget(bottom_pane)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 0)
-        splitter.setSizes([580, 240])
         self._preview_splitter = splitter
         return splitter
 
-    def _set_view_options_expanded(self, expanded: bool) -> None:
-        splitter = self._preview_splitter
-        pane = self._view_options_pane
-        if expanded:
-            pane.setMaximumHeight(QWIDGETSIZE_MAX)
-            self.preview_properties_panel.setVisible(True)
-            sizes = self._view_options_sizes
-            if not sizes or sizes[1] < 160:
-                total = sum(splitter.sizes())
-                sizes = [max(total - 240, 160), 240]
-            splitter.setSizes(sizes)
+    def _style_view_options_panel(self) -> None:
+        if PLATFORM_THEME == "mac":
+            from ui import mac_theme
+
+            base, dark = mac_theme.tokens()["window"], mac_theme.is_dark()
+        elif PLATFORM_THEME == "windows":
+            from ui import windows_theme
+
+            base, dark = windows_theme.tokens()["window"], windows_theme.is_dark()
         else:
-            self._view_options_sizes = splitter.sizes()
-            self.preview_properties_panel.setVisible(False)
-            heading_height = self._view_options_heading.sizeHint().height()
-            pane.setMaximumHeight(heading_height)
-            total = sum(self._view_options_sizes)
-            splitter.setSizes([total - heading_height, heading_height])
-        splitter.handle(1).setEnabled(expanded)
+            base, dark = "#2b2b2b", True
+        color = QColor(base)
+        edge = "rgba(255, 255, 255, 0.14)" if dark else "rgba(0, 0, 0, 0.16)"
+        self._view_options_panel.setStyleSheet(
+            "QFrame#FloatingViewOptions {"
+            f" background-color: rgba({color.red()}, {color.green()}, {color.blue()}, 0.93);"
+            f" border: 1px solid {edge}; border-radius: 10px; }}"
+            " QFrame#FloatingViewOptions QScrollArea, QFrame#FloatingViewOptions QScrollArea > QWidget > QWidget"
+            " { background: transparent; }"
+            ' QFrame#FloatingViewOptions QLabel[role="panel-heading"] { padding: 8px 12px 8px 12px; }'
+        )
+
+    def _layout_view_options_panel(self) -> None:
+        panel, viewport = self._view_options_panel, self._viewport_frame
+        margin = _VIEW_OPTIONS_MARGIN
+        max_width = max(120, viewport.width() - 2 * margin)
+        max_height = max(40, viewport.height() - 2 * margin)
+        heading_height = self._view_options_heading.sizeHint().height()
+        if self._view_options_heading.is_expanded():
+            width = min(_VIEW_OPTIONS_WIDTH, _VIEW_OPTIONS_MAX_WIDTH, max_width)
+            content = heading_height + self.preview_properties_panel.content_height()
+            height = min(content, _VIEW_OPTIONS_HEIGHT, max_height)
+        else:
+            width = min(self._view_options_heading.sizeHint().width() + 4, max_width)
+            height = min(heading_height, max_height)
+        panel.setGeometry(margin, viewport.height() - margin - height, width, height)
+        panel.raise_()
+
+    def eventFilter(self, obj, event) -> bool:
+        if obj is getattr(self, "_viewport_frame", None) and event.type() == QEvent.Type.Resize:
+            self._layout_view_options_panel()
+        return super().eventFilter(obj, event)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "_view_options_panel"):
+            self._layout_view_options_panel()
+
+    def _set_view_options_expanded(self, expanded: bool) -> None:
+        self.preview_properties_panel.setVisible(expanded)
+        self._layout_view_options_panel()
         QSettings().setValue(_VIEW_OPTIONS_EXPANDED_KEY, expanded)
 
     def showEvent(self, event) -> None:
@@ -638,6 +717,7 @@ class MainWindow(QMainWindow):
         self.ao_panel.set_has_height(self._active_display_image(MapType.HEIGHT) is not None)
         self._update_map_controls_enabled()
         self._refresh_material_slots_bar()
+        self._refresh_slot_info()
 
     def _open_tiled_preview(self, target_map_type: Optional[MapType] = None) -> None:
         map_type = target_map_type or self.current_map_type
@@ -829,54 +909,16 @@ class MainWindow(QMainWindow):
             else:
                 self.height_panel.set_model_status(
                     f"Loaded: {self.estimator.family} / {self.estimator.variant} on {self.estimator.device.upper()} "
-                    f"— selected: {family} / {variant} on {device.upper()} (click 'Load Model' to switch)"
+                    f"— selected: {family} / {variant} on {device.upper()} (loads on the next generate)"
                 )
         else:
-            self.height_panel.set_model_status("No model loaded — click 'Load Model'.")
-
-    def _load_model(self) -> None:
-        if self.model_thread is not None and self.model_thread.isRunning():
-            return
-        family, variant = self.height_panel.selected_family_variant()
-        device = self.height_panel.selected_device()
-
-        if self._is_model_ready_and_matched():
-            self.height_panel.set_model_status(
-                f"Loaded: {self.estimator.family} / {self.estimator.variant} on {self.estimator.device.upper()}"
-            )
-            return
-
-        self._replace_estimator(family, variant, device)
-        self.height_panel.set_model_controls_enabled(False)
-        self.generate_btn.setEnabled(False)
-        self.height_panel.set_model_status("Loading…")
-
-        dialog = OperationProgressDialog(
-            "Loading Depth Model",
-            f"Initializing {family} ({variant}) on {device.upper()}…",
-            parent=self,
-        )
-        self.model_thread = ModelLoadWorker(self.estimator)
-        self.model_thread.progress.connect(lambda msg: (dialog.set_status(msg), self.height_panel.set_model_status(msg)))
-
-        def on_loaded():
-            dialog.accept()
-            self._on_model_loaded()
-
-        def on_failed(err):
-            dialog.reject()
-            self._on_model_load_failed(err)
-
-        self.model_thread.finished_ok.connect(on_loaded)
-        self.model_thread.failed.connect(on_failed)
-        self.model_thread.start()
-        dialog.exec()
+            self.height_panel.set_model_status("No model loaded yet — it loads when you generate.")
 
     def _on_model_loaded(self) -> None:
         self.height_panel.set_model_controls_enabled(True)
         self.generate_btn.setEnabled(True)
         if self.estimator is None or not self.estimator.is_loaded():
-            self.height_panel.set_model_status("No model loaded — click 'Load Model'.")
+            self.height_panel.set_model_status("No model loaded yet — it loads when you generate.")
             return
         self.height_panel.set_model_status(
             f"Loaded: {self.estimator.family} / {self.estimator.variant} on {self.estimator.device.upper()}"
@@ -1116,7 +1158,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "Albedo required",
-                "Please upload an Albedo image first before generating maps.",
+                "Please import an Albedo image first before generating maps.",
             )
             return
         if self.infer_thread is not None and self.infer_thread.isRunning():
@@ -1179,7 +1221,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Albedo required",
-                "Upload an Albedo base texture first.",
+                "Import an Albedo base texture first.",
             )
             return
         opts = self.albedo_panel.current_adjust_options()
@@ -1198,7 +1240,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Height required",
-                "Upload or generate a Height map first — AO is derived from it.",
+                "Import or generate a Height map first — AO is derived from it.",
             )
             return
         height_arr = _image_to_height_array(height_image)
@@ -1215,7 +1257,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Normal required",
-                "Upload or generate a Normal map first — Roughness is derived from it.",
+                "Import or generate a Normal map first — Roughness is derived from it.",
             )
             return
         self._generate_roughness_from_normal(_image_to_normal_array(normal_image))
@@ -1231,7 +1273,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Height required",
-                "Upload or generate a Height map first — Normal is derived from it.",
+                "Import or generate a Height map first — Normal is derived from it.",
             )
             return
         height_arr = _image_to_height_array(height_image)
@@ -1249,7 +1291,7 @@ class MainWindow(QMainWindow):
                 self,
                 "Nothing to generate",
                 "Height is generated from the Albedo source image — switch to "
-                "the Albedo tab and upload an image first.",
+                "the Albedo tab and import an image first.",
             )
             return
         if not self._is_model_ready_and_matched():
@@ -1435,6 +1477,7 @@ class MainWindow(QMainWindow):
         if mode == "properties":
             self.generate_btn.setText("Save")
             self.kill_btn.setText("Revert")
+            self.kill_btn.setVisible(True)
             self._update_save_revert_enabled()
         else:
             self.generate_btn.setText("Generate Map")
@@ -1445,6 +1488,7 @@ class MainWindow(QMainWindow):
             )
             self.generate_btn.setEnabled(not busy)
             self.kill_btn.setEnabled(busy)
+            self.kill_btn.setVisible(busy)
 
     def _update_save_revert_enabled(self) -> None:
         if self._bottom_bar_mode != "properties":
@@ -1587,6 +1631,7 @@ class MainWindow(QMainWindow):
         if self._bottom_bar_mode == "generate":
             self.generate_btn.setEnabled(not busy)
             self.kill_btn.setEnabled(busy)
+            self.kill_btn.setVisible(busy)
         self.height_panel.set_model_controls_enabled(not busy)
         self.height_panel.set_chunk_controls_enabled(not busy)
         self.progress_bar.setVisible(busy)
@@ -1819,7 +1864,7 @@ class MainWindow(QMainWindow):
             items.append(("Curvature", curvature_map_to_image(curvature), "curvature.png"))
 
         if not items:
-            QMessageBox.information(self, "Nothing to export", "No maps have been generated or uploaded yet.")
+            QMessageBox.information(self, "Nothing to export", "No maps have been generated or imported yet.")
             return
 
         dialog = OperationProgressDialog("Exporting Maps", "Preparing export…", parent=self)

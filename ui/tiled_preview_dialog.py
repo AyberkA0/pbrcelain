@@ -394,9 +394,9 @@ class TiledPreviewDialog(QDialog):
 
         self.info_label = QLabel("")
         self.hint_label = QLabel(
-            "💡 Drag to pan | Mouse wheel to zoom | Double-click to reset zoom"
+            "Drag to pan | Mouse wheel to zoom | Double-click to reset zoom"
             if PLATFORM_THEME == "legacy" else
-            "💡 Drag or two-finger swipe to pan | Pinch or mouse wheel to zoom | Double-click to reset zoom"
+            "Drag or two-finger swipe to pan | Pinch or mouse wheel to zoom | Double-click to reset zoom"
         )
         legacy_style(self.hint_label, "color: #777777; font-size: 10px;", "hint")
         sb_layout.addWidget(self.info_label)

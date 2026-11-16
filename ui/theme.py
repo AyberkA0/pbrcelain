@@ -248,11 +248,11 @@ QPushButton[role="slot-btn"] {{
     color: #a0a0a0;
     border: 1px solid #1e1e1e;
     border-radius: 3px;
-    padding: 6px 4px;
+    padding: 3px 4px;
     font-size: 10px;
     font-weight: 600;
     text-align: center;
-    min-height: 42px;
+    min-height: 20px;
 }}
 
 QPushButton[role="slot-btn"]:hover {{

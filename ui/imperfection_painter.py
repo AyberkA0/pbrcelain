@@ -467,7 +467,7 @@ class ImperfectionPainterDialog(QDialog):
         legacy_style(tool_title, "font-weight: bold; font-size: 10px; color: #8a8a8a; letter-spacing: 0.5px;", "section-caps")
         tool_vbox.addWidget(tool_title)
 
-        self.btn_rough = QPushButton("🔨 Rusty / Worn")
+        self.btn_rough = QPushButton("Rusty / Worn")
         self.btn_rough.setCheckable(True)
         self.btn_rough.setChecked(True)
         legacy_style(self.btn_rough, """
@@ -492,7 +492,7 @@ class ImperfectionPainterDialog(QDialog):
         self.btn_rough.clicked.connect(lambda: self._set_brush_mode("rough"))
         tool_vbox.addWidget(self.btn_rough)
 
-        self.btn_gloss = QPushButton("✨ Glossy / Wet")
+        self.btn_gloss = QPushButton("Glossy / Wet")
         self.btn_gloss.setCheckable(True)
         legacy_style(self.btn_gloss, """
             QPushButton:checked {
@@ -516,7 +516,7 @@ class ImperfectionPainterDialog(QDialog):
         self.btn_gloss.clicked.connect(lambda: self._set_brush_mode("gloss"))
         tool_vbox.addWidget(self.btn_gloss)
 
-        self.btn_eraser = QPushButton("🧹 Eraser (Revert)")
+        self.btn_eraser = QPushButton("Eraser (Revert)")
         self.btn_eraser.setCheckable(True)
         legacy_style(self.btn_eraser, """
             QPushButton:checked {
@@ -676,11 +676,11 @@ class ImperfectionPainterDialog(QDialog):
         canvas_vbox.addWidget(self.canvas, 1)
 
         status_bar = QLabel(pick(
-            mac="💡 Pinch or Wheel: Zoom | Two-Finger Swipe, Middle-Click or ⌥-Drag: Pan | "
+            mac="Pinch or Wheel: Zoom | Two-Finger Swipe, Middle-Click or ⌥-Drag: Pan | "
                 "Click or Pen: Paint (pen pressure sets size and flow)",
-            windows="💡 Pinch or Wheel: Zoom | Two-Finger Swipe, Middle-Click or Alt+Drag: Pan | "
+            windows="Pinch or Wheel: Zoom | Two-Finger Swipe, Middle-Click or Alt+Drag: Pan | "
                     "Click or Pen: Paint (pen pressure sets size and flow)",
-            legacy="💡 Wheel: Zoom | Middle-Click or Alt+Drag: Pan | Left-Click: Paint smooth strokes",
+            legacy="Wheel: Zoom | Middle-Click or Alt+Drag: Pan | Left-Click: Paint smooth strokes",
         ))
         legacy_style(status_bar, "color: #64748b; font-size: 10px;", "hint")
         canvas_vbox.addWidget(status_bar)

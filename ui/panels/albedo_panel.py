@@ -19,7 +19,7 @@ class AlbedoPanel(GeneratePropertiesContainer):
         super().__init__(parent)
 
         gen_info = QLabel(
-            "Albedo is the primary color texture. Upload your base image directly.\n\n"
+            "Albedo is the primary color texture. Import your base image directly.\n\n"
             "Seamless Tiling, Auto White Balance, and Color Range Shifts can be "
             "interactively adjusted in real-time under the Properties / Adjustment tab."
         )
@@ -28,11 +28,10 @@ class AlbedoPanel(GeneratePropertiesContainer):
         self.generate_page.add_wide(gen_info)
         self.generate_page.add_stretch()
 
-        self.properties_page.add_section("Color Neutralization")
         self.wb_cb = QCheckBox("Auto White Balance")
         self.wb_cb.setToolTip("Neutralize undesirable yellow/blue color cast using gray-world normalization.")
         self.wb_cb.stateChanged.connect(self.propertiesChanged.emit)
-        self.properties_page.add_wide(self.wb_cb)
+        self.properties_page.add_section("Auto White Balance", toggle=self.wb_cb)
 
         self.wb_strength_spin = QDoubleSpinBox()
         self.wb_strength_spin.setRange(0.1, 1.0)
@@ -41,12 +40,10 @@ class AlbedoPanel(GeneratePropertiesContainer):
         self.wb_strength_spin.valueChanged.connect(self.propertiesChanged.emit)
         self.properties_page.add_param("Neutralize strength", self.wb_strength_spin)
 
-        self.properties_page.add_section("Color Range Shift")
-
         self.shift_enabled_cb = QCheckBox("Enable Color Shift")
         self.shift_enabled_cb.stateChanged.connect(self._on_shift_toggled)
         self.shift_enabled_cb.stateChanged.connect(self.propertiesChanged.emit)
-        self.properties_page.add_wide(self.shift_enabled_cb)
+        self.properties_page.add_section("Color Range Shift", toggle=self.shift_enabled_cb)
 
         self.source_color = QColor(200, 200, 200)
         self.src_color_btn = QPushButton()
@@ -87,11 +84,10 @@ class AlbedoPanel(GeneratePropertiesContainer):
         self.falloff_spin.valueChanged.connect(self.propertiesChanged.emit)
         self.properties_page.add_param("Soft falloff", self.falloff_spin)
 
-        self.properties_page.add_section("Seamless Tiling")
         self.seamless_cb = QCheckBox("Make Seamless (Tileable)")
         self.seamless_cb.setToolTip("Blends opposing boundary strips to produce matching edges for infinite repeats.")
         self.seamless_cb.stateChanged.connect(self.propertiesChanged.emit)
-        self.properties_page.add_wide(self.seamless_cb)
+        self.properties_page.add_section("Seamless Tiling", toggle=self.seamless_cb)
 
         self.seamless_overlap_spin = QDoubleSpinBox()
         self.seamless_overlap_spin.setRange(2.0, 30.0)
@@ -101,7 +97,7 @@ class AlbedoPanel(GeneratePropertiesContainer):
         self.seamless_overlap_spin.valueChanged.connect(self.propertiesChanged.emit)
         self.properties_page.add_param("Border overlap (%)", self.seamless_overlap_spin)
 
-        self.properties_page.add_section("Format")
+        self.properties_page.end_section()
 
         self.bit_depth_combo = QComboBox()
         self.bit_depth_combo.addItems(["8-bit", "16-bit"])

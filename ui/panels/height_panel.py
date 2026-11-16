@@ -55,7 +55,6 @@ DETREND_MAP = {
 
 class HeightPanel(GeneratePropertiesContainer):
     modelSettingsChanged = pyqtSignal()
-    loadModelRequested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -66,7 +65,7 @@ class HeightPanel(GeneratePropertiesContainer):
 
         self.note_label = QLabel(
             "No Albedo source yet, so Generate Map has nothing to work from "
-            "(you can still upload a Height image directly instead)."
+            "(you can still import a Height image directly instead)."
         )
         self.note_label.setWordWrap(True)
         self.note_label.setProperty("role", "dim")
@@ -104,13 +103,9 @@ class HeightPanel(GeneratePropertiesContainer):
         self.device_combo.currentTextChanged.connect(self.modelSettingsChanged.emit)
         page.add_param("Device", self.device_combo)
 
-        self.load_model_btn = QPushButton("Load Model")
-        self.load_model_btn.clicked.connect(self.loadModelRequested.emit)
-
-        self.model_status_label = QLabel("No model loaded.")
+        self.model_status_label = QLabel("No model loaded yet — it loads when you generate.")
         self.model_status_label.setWordWrap(True)
 
-        page.add_wide(self.load_model_btn)
         page.add_wide(self.model_status_label)
 
         self._on_family_changed(self.family_combo.currentText())
@@ -148,13 +143,11 @@ class HeightPanel(GeneratePropertiesContainer):
         self.model_status_label.setText(text)
 
     def set_model_controls_enabled(self, enabled: bool) -> None:
-        for w in (self.load_model_btn, self.family_combo, self.variant_combo, self.device_combo):
+        for w in (self.family_combo, self.variant_combo, self.device_combo):
             w.setEnabled(enabled)
 
     def _build_chunk_group(self) -> None:
         page = self.generate_page
-        page.add_section("Chunk Estimation")
-
         self.chunk_checkbox = QCheckBox("Enable chunk estimation (high resolution)")
         self.chunk_checkbox.setToolTip(
             "Runs one full-image reference pass, then re-runs the model on\n"
@@ -162,7 +155,7 @@ class HeightPanel(GeneratePropertiesContainer):
             "Higher quality, but requires more computation."
         )
         self.chunk_checkbox.stateChanged.connect(self._on_chunk_toggled)
-        page.add_wide(self.chunk_checkbox)
+        page.add_section("Chunk Estimation", toggle=self.chunk_checkbox)
 
         batch_container = QWidget()
         batch_layout = QHBoxLayout(batch_container)
@@ -254,34 +247,8 @@ class HeightPanel(GeneratePropertiesContainer):
 
     def _build_seamless_gen_group(self) -> None:
         page = self.generate_page
-        page.add_section("Seamless Tiling")
-
-        seamless_container = QWidget()
-        seamless_layout = QVBoxLayout(seamless_container)
-        seamless_layout.setContentsMargins(0, 0, 0, 0)
-        seamless_layout.setSpacing(4)
-
-        top_row = QWidget()
-        top_row_layout = QHBoxLayout(top_row)
-        top_row_layout.setContentsMargins(0, 0, 0, 0)
-        top_row_layout.setSpacing(4)
-
         self.seamless_gen_checkbox = QCheckBox("Seamless")
         self.seamless_gen_checkbox.toggled.connect(self._on_seamless_gen_toggled)
-
-        self.seamless_info_label = QLabel("ⓘ")
-        self.seamless_info_label.setCursor(Qt.CursorShape.WhatsThisCursor)
-        legacy_style(self.seamless_info_label, """
-            QLabel {
-                color: #1473e6;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 0 4px;
-            }
-            QLabel:hover {
-                color: #2688f2;
-            }
-        """, "info-icon")
 
         tooltip_text = (
             "Seamless Tiling (>99.8%):\n\n"
@@ -290,25 +257,19 @@ class HeightPanel(GeneratePropertiesContainer):
             "  may still be visible upon close inspection in the extreme corner junctions."
         )
         self.seamless_gen_checkbox.setToolTip(tooltip_text)
-        self.seamless_info_label.setToolTip(tooltip_text)
 
-        top_row_layout.addWidget(self.seamless_gen_checkbox)
-        top_row_layout.addWidget(self.seamless_info_label)
-        top_row_layout.addStretch()
-        seamless_layout.addWidget(top_row)
+        page.add_section("Seamless Tiling", toggle=self.seamless_gen_checkbox)
 
         self.force_seamless_blur_checkbox = QCheckBox("Force seamless with blur")
         self.force_seamless_blur_checkbox.setEnabled(False)
-        self.force_seamless_blur_checkbox.setStyleSheet("margin-left: 18px;")
         self.force_seamless_blur_checkbox.setToolTip(
             "Force seamless with blur:\n\n"
             "• Applies a smooth band blur (edge length × 3%) along the top and left frame\n"
             "  boundary lines of the extended tile until sharp step discontinuities disappear.\n"
             "• Eliminates boundary seam artifacts before the depth model runs."
         )
-        seamless_layout.addWidget(self.force_seamless_blur_checkbox)
-
-        page.add_wide(seamless_container)
+        page.add_wide(self.force_seamless_blur_checkbox)
+        page.end_section()
 
     def _on_seamless_gen_toggled(self, checked: bool) -> None:
         self.force_seamless_blur_checkbox.setEnabled(checked)
@@ -421,6 +382,7 @@ class HeightPanel(GeneratePropertiesContainer):
 
         reset_btn = QPushButton("Reset to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)
+        page.end_section()
         page.add_wide(reset_btn)
 
         info_card = QFrame()
@@ -438,7 +400,7 @@ class HeightPanel(GeneratePropertiesContainer):
         card_layout.setContentsMargins(10, 8, 10, 8)
         card_layout.setSpacing(4)
 
-        card_title = QLabel("💡 Workflow Recommendation")
+        card_title = QLabel("Workflow Recommendation")
         legacy_style(card_title, "background-color: transparent; font-weight: bold; font-size: 11px; color: #1473e6;", "card-title")
         card_layout.addWidget(card_title)
 

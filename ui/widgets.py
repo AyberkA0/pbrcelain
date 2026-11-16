@@ -92,3 +92,32 @@ class ImageLabel(QLabel):
             self.imageDropped.emit(path)
         else:
             self.fileDropped.emit(path)
+
+
+class ToggleHeading(QLabel):
+    toggled = pyqtSignal(bool)
+
+    def __init__(self, title: str, expanded: bool = True, parent=None):
+        super().__init__(parent)
+        self._title = title
+        self._expanded = expanded
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._refresh()
+
+    def is_expanded(self) -> bool:
+        return self._expanded
+
+    def set_expanded(self, expanded: bool) -> None:
+        if expanded == self._expanded:
+            return
+        self._expanded = expanded
+        self._refresh()
+        self.toggled.emit(expanded)
+
+    def _refresh(self) -> None:
+        self.setText(("\u25be  " if self._expanded else "\u25b8  ") + self._title)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.set_expanded(not self._expanded)
+        super().mouseReleaseEvent(event)

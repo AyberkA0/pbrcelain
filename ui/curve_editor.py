@@ -503,7 +503,7 @@ class CurveEditorDialog(QDialog):
 
         axis_row.addSpacing(10)
 
-        self.link_checkbox = QCheckBox("🔗 Link X && Y")
+        self.link_checkbox = QCheckBox("Link X && Y")
         self.link_checkbox.setToolTip("Synchronize both axes symmetrically for spherical/isotropic lenses.")
         legacy_style(self.link_checkbox, "color: #e4e4e7; font-size: 11px;")
         self.link_checkbox.toggled.connect(self._on_link_toggled)
@@ -577,7 +577,7 @@ class CurveEditorDialog(QDialog):
 
         right_col.addLayout(preview_header)
 
-        self.preview_label = ImageLabel("No Height map source loaded.\n(Upload or generate a map to see live preview)", self)
+        self.preview_label = ImageLabel("No Height map source loaded.\n(Import or generate a map to see live preview)", self)
         self.preview_label.setMinimumSize(320, 260)
         legacy_style(self.preview_label, """
             QLabel {
@@ -590,7 +590,7 @@ class CurveEditorDialog(QDialog):
         """)
         right_col.addWidget(self.preview_label, 1)
 
-        preview_status = QLabel("⚡ Live 60 FPS update • Real-time dual-axis correction")
+        preview_status = QLabel("Live 60 FPS update • Real-time dual-axis correction")
         legacy_style(preview_status, "color: #71717a; font-size: 10px;", "hint")
         right_col.addWidget(preview_status)
 

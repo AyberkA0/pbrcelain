@@ -58,9 +58,9 @@ class PreviewPropertiesPanel(QWidget):
         self._stack = QStackedWidget()
         pages = (
             ("Geometry", self._build_geometry_group),
+            ("Display", self._build_display_group),
             ("Camera", self._build_camera_group),
             ("Lighting", self._build_lighting_group),
-            ("Display", self._build_display_group),
             ("Parallax", self._build_parallax_group),
             ("Environment", self._build_environment_group),
         )
@@ -89,10 +89,22 @@ class PreviewPropertiesPanel(QWidget):
             tabs_row.addStretch(1)
 
         self._tab_group.button(0).setChecked(True)
-        self._tab_group.idClicked.connect(self._stack.setCurrentIndex)
+        self._tab_group.idClicked.connect(self._on_tab_clicked)
 
         outer.addLayout(tabs_row)
         outer.addWidget(self._stack, 1)
+
+    tabChanged = pyqtSignal()
+
+    def _on_tab_clicked(self, index: int) -> None:
+        self._stack.setCurrentIndex(index)
+        self.tabChanged.emit()
+
+    def content_height(self) -> int:
+        """Height needed to show the current tab without scrolling."""
+        page = self._stack.currentWidget().widget()
+        tabs = self.layout().itemAt(0).sizeHint().height()
+        return tabs + page.sizeHint().height() + 4
 
     def _build_geometry_group(self) -> QWidget:
         group = QWidget()

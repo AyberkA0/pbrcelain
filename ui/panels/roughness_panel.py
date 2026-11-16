@@ -30,17 +30,16 @@ class RoughnessPanel(GeneratePropertiesContainer):
 
         self.note_label = QLabel(
             "No Normal map yet, so Generate Map has nothing to work from "
-            "(you can still upload a Roughness map directly instead)."
+            "(you can still import a Roughness map directly instead)."
         )
         self.note_label.setWordWrap(True)
         self.note_label.setProperty("role", "dim")
         self.generate_page.add_wide(self.note_label)
 
-        self.generate_page.add_section("PBR Material Preset")
         self.preset_combo = QComboBox()
         self.preset_combo.addItems(list(ROUGHNESS_PRESETS.keys()))
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
-        self.generate_page.add_param("Material type", self.preset_combo)
+        self.generate_page.add_param("Material type", self.preset_combo, wide=True)
 
         self.generate_page.add_section("Hybrid Source Blending")
         self.height_cavity_spin = QDoubleSpinBox()
@@ -65,6 +64,7 @@ class RoughnessPanel(GeneratePropertiesContainer):
 
         reset_gen_btn = QPushButton("Reset Generate Defaults")
         reset_gen_btn.clicked.connect(self.reset_generate_defaults)
+        self.generate_page.end_section()
         self.generate_page.add_wide(reset_gen_btn)
         self.generate_page.add_stretch()
 
@@ -115,7 +115,7 @@ class RoughnessPanel(GeneratePropertiesContainer):
         paint_row.setContentsMargins(0, 0, 0, 0)
         paint_row.setSpacing(6)
 
-        self.paint_btn = QPushButton("🖌️ Paint Imperfections…")
+        self.paint_btn = QPushButton("Paint Imperfections…")
         self.paint_btn.setToolTip("Open brush window to paint custom rust, wear, scratches, or polished glossy spots.")
         self.paint_btn.clicked.connect(self._open_imperfection_painter)
         paint_row.addWidget(self.paint_btn, 1)
@@ -142,6 +142,7 @@ class RoughnessPanel(GeneratePropertiesContainer):
 
         reset_btn = QPushButton("Reset to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)
+        page.end_section()
         page.add_wide(reset_btn)
 
         page.add_stretch()

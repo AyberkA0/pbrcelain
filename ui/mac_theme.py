@@ -18,6 +18,7 @@ DARK = {
     "separator": "#0f0f0f",
     "group": "rgba(255, 255, 255, 0.045)",
     "hairline": "rgba(255, 255, 255, 0.09)",
+    "title_line": "rgba(255, 255, 255, 0.10)",
     "text": "#e5e5e7",
     "strong": "#ffffff",
     "secondary": "#98989d",
@@ -59,6 +60,7 @@ LIGHT = {
     "separator": "#d4d4d8",
     "group": "rgba(0, 0, 0, 0.035)",
     "hairline": "rgba(0, 0, 0, 0.10)",
+    "title_line": "rgba(0, 0, 0, 0.12)",
     "text": "#1d1d1f",
     "strong": "#000000",
     "secondary": "#6e6e73",
@@ -227,6 +229,7 @@ QLabel[role="panel-heading"], QLabel[role="viewport-label"] {{
 
 QLabel[role="viewport-label"] {{
     padding: 0px 14px;
+    border-bottom: 1px solid {t["title_line"]};
 }}
 
 QGroupBox {{
@@ -352,11 +355,11 @@ QPushButton[role="slot-btn"] {{
     color: {t["secondary"]};
     border: 1px solid {t["hairline"]};
     border-radius: 8px;
-    padding: 6px 2px;
+    padding: 3px 2px;
     font-size: 11px;
     font-weight: 600;
     text-align: center;
-    min-height: 40px;
+    min-height: 20px;
 }}
 
 QPushButton[role="slot-btn"]:hover {{
@@ -573,7 +576,7 @@ QProgressBar::chunk {{
 }}
 
 QSplitter::handle {{
-    background-color: {t["separator"]};
+    background-color: {t["title_line"]};
 }}
 
 QSplitter::handle:horizontal {{
@@ -646,6 +649,11 @@ QWidget#StatusBarPanel {{
 
 #PreviewSection {{
     background-color: {t["window"]};
+}}
+
+#TitleBarSpace {{
+    background-color: {t["window"]};
+    border-bottom: 1px solid {t["title_line"]};
 }}
 
 #DynamicPanelHost, #PreviewPropertiesPanel, #MapInspector {{

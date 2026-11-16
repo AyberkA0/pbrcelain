@@ -131,10 +131,10 @@ without re-running the model.
 - **Curvature** — exported alongside the other maps (optional, in the AO
   panel): mid-grey is flat, brighter marks edges and ridges, darker marks
   cavities; the usual mask for edge wear and dirt in material graphs.
-- **Albedo** — used as uploaded, with optional auto white balance, color-range
+- **Albedo** — used as imported, with optional auto white balance, color-range
   shifting and seamless edge blending.
 
-Any map can also be uploaded directly instead of generated.
+Any map can also be imported directly instead of generated.
 
 ## 3D preview
 
