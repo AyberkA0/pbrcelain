@@ -5,6 +5,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from core.tiling import filter_wrapped
+
 
 AO_METHOD_RAYTRACED = "raytraced"
 AO_METHOD_CLASSIC = "classic"
@@ -42,7 +44,7 @@ def generate_ao_map(
 
     if options.blur_radius > 0:
         k = options.blur_radius * 2 + 1
-        ao = cv2.GaussianBlur(ao, (k, k), 0)
+        ao = filter_wrapped(ao, options.blur_radius, lambda a: cv2.GaussianBlur(a, (k, k), 0))
 
     if options.invert:
         ao = 1.0 - ao

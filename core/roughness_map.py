@@ -6,6 +6,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from core.tiling import filter_wrapped
+
 
 ROUGHNESS_PRESETS: dict[str, dict] = {
     "Custom": {
@@ -85,7 +87,9 @@ def generate_roughness_map(normal: np.ndarray, options: RoughnessMapOptions | No
     window_px = max(3, int(round(min(h, w) * options.window_pct / 100.0)))
     if window_px % 2 == 0:
         window_px += 1
-    mean_n = cv2.boxFilter(n, ddepth=-1, ksize=(window_px, window_px))
+    mean_n = filter_wrapped(
+        n, window_px // 2, lambda a: cv2.boxFilter(a, ddepth=-1, ksize=(window_px, window_px))
+    )
     avg_len = np.clip(np.linalg.norm(mean_n, axis=-1), 0.0, 1.0)
 
     variance_signal = 1.0 - avg_len
@@ -95,7 +99,7 @@ def generate_roughness_map(normal: np.ndarray, options: RoughnessMapOptions | No
         h_arr = options.height_source.astype(np.float32)
         if h_arr.shape[0] != h or h_arr.shape[1] != w:
             h_arr = cv2.resize(h_arr, (w, h), interpolation=cv2.INTER_LINEAR)
-        h_smooth = cv2.GaussianBlur(h_arr, (9, 9), 0)
+        h_smooth = filter_wrapped(h_arr, 4, lambda a: cv2.GaussianBlur(a, (9, 9), 0))
         cavity = np.clip((h_smooth - h_arr) * 4.0, -1.0, 1.0)
         if options.height_cavity_factor > 0:
             roughness += options.height_cavity_factor * np.maximum(0.0, cavity)
@@ -115,7 +119,7 @@ def generate_roughness_map(normal: np.ndarray, options: RoughnessMapOptions | No
         if lum.shape[0] != h or lum.shape[1] != w:
             lum = cv2.resize(lum, (w, h), interpolation=cv2.INTER_LINEAR)
 
-        lum_var = np.abs(lum - cv2.GaussianBlur(lum, (7, 7), 0))
+        lum_var = np.abs(lum - filter_wrapped(lum, 3, lambda a: cv2.GaussianBlur(a, (7, 7), 0)))
         roughness += options.albedo_contrast_factor * (lum_var * 2.5)
 
     if options.invert:

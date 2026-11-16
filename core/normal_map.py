@@ -25,6 +25,14 @@ class NormalMapOptions:
 _REFERENCE_DIM = 64.0
 
 
+def _macro_kernel(h: int, w: int) -> int:
+    return max(9, int(min(h, w) * 0.04) * 2 + 1)
+
+
+def _medium_kernel(h: int, w: int) -> int:
+    return max(3, int(min(h, w) * 0.01) * 2 + 1)
+
+
 def generate_normal_map(height: np.ndarray, options: NormalMapOptions | None = None) -> np.ndarray:
     options = options or NormalMapOptions()
     working = height.astype(np.float32)
@@ -32,7 +40,9 @@ def generate_normal_map(height: np.ndarray, options: NormalMapOptions | None = N
 
     margin = 0
     if options.seamless:
-        margin = max(options.pre_blur_radius, 12 if options.multi_frequency else 0) + 3
+        margin = max(0, options.pre_blur_radius) + 3
+        if options.multi_frequency:
+            margin += max(_macro_kernel(h, w), _medium_kernel(h, w)) // 2
         working = np.pad(working, margin, mode="wrap")
 
     if options.pre_blur_radius > 0:
@@ -42,12 +52,12 @@ def generate_normal_map(height: np.ndarray, options: NormalMapOptions | None = N
     scale = options.strength * (max(h, w) / _REFERENCE_DIM)
 
     if options.multi_frequency:
-        k_macro = max(9, int(min(h, w) * 0.04) * 2 + 1)
+        k_macro = _macro_kernel(h, w)
         h_macro = cv2.GaussianBlur(working, (k_macro, k_macro), 0)
         gx_macro = cv2.Sobel(h_macro, cv2.CV_32F, 1, 0, ksize=3) * scale * options.macro_strength
         gy_macro = cv2.Sobel(h_macro, cv2.CV_32F, 0, 1, ksize=3) * scale * options.macro_strength
 
-        k_med = max(3, int(min(h, w) * 0.01) * 2 + 1)
+        k_med = _medium_kernel(h, w)
         h_med = cv2.GaussianBlur(working, (k_med, k_med), 0)
         gx_med = cv2.Sobel(h_med - h_macro, cv2.CV_32F, 1, 0, ksize=3) * scale * options.medium_strength
         gy_med = cv2.Sobel(h_med - h_macro, cv2.CV_32F, 0, 1, ksize=3) * scale * options.medium_strength
