@@ -400,7 +400,7 @@ class Preview3DWidget(QOpenGLWidget):
         self._is_dragging = False
 
         self._settings = {
-            "mesh": "sphere",
+            "mesh": "plane",
             "fov": 75.0,
             "distance": 3.5,
             "rotation_speed": 0.5,
@@ -812,7 +812,7 @@ class Preview3DWidget(QOpenGLWidget):
         gl.glBindTexture(gl.GL_TEXTURE_2D, self._ao_tex)
         gl.glUniform1i(u["uAOTex"], 5)
 
-        mesh_vao, mesh_index_count = self._meshes.get(self._settings.get("mesh", "sphere"), self._meshes["sphere"])
+        mesh_vao, mesh_index_count = self._meshes.get(self._settings.get("mesh", "plane"), self._meshes["plane"])
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE if self._settings.get("wireframe") else gl.GL_FILL)
         gl.glBindVertexArray(mesh_vao)
         gl.glDrawElements(gl.GL_TRIANGLES, mesh_index_count, gl.GL_UNSIGNED_INT, None)

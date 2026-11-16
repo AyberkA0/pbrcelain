@@ -2,23 +2,29 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
-    QGroupBox,
+    QFrame,
     QHBoxLayout,
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from ui.theme import IS_MAC
+
 MESH_LABELS = {"sphere": "Sphere", "cube": "Cube", "plane": "Plane"}
 MESH_VALUES = {v: k for k, v in MESH_LABELS.items()}
+DEFAULT_MESH = "plane"
 
 
 class PreviewPropertiesPanel(QWidget):
@@ -31,47 +37,76 @@ class PreviewPropertiesPanel(QWidget):
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        content = QWidget()
-        layout = QHBoxLayout(content)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(8)
+        outer.setSpacing(0)
 
-        col1 = QVBoxLayout()
-        col1.setSpacing(8)
-        col1.addWidget(self._build_geometry_group())
-        col1.addWidget(self._build_camera_group())
-        col1.addWidget(self._build_lighting_group())
-        col1.addStretch(1)
+        tabs_row = QHBoxLayout()
+        tabs_row.setContentsMargins(6, 2, 6, 4)
+        tabs_row.setSpacing(2)
+        tab_host_layout = tabs_row
+        if IS_MAC:
+            tabs_row.setContentsMargins(14, 2, 14, 4)
+            segment = QWidget()
+            segment.setObjectName("SubtabBar")
+            segment.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            tab_host_layout = QHBoxLayout(segment)
+            tab_host_layout.setContentsMargins(2, 2, 2, 2)
+            tab_host_layout.setSpacing(2)
+            tabs_row.addWidget(segment, 1)
 
-        col2 = QVBoxLayout()
-        col2.setSpacing(8)
-        col2.addWidget(self._build_display_group())
-        col2.addWidget(self._build_parallax_group())
-        col2.addWidget(self._build_environment_group())
-        col2.addStretch(1)
+        self._tab_group = QButtonGroup(self)
+        self._tab_group.setExclusive(True)
+        self._stack = QStackedWidget()
+        pages = (
+            ("Geometry", self._build_geometry_group),
+            ("Camera", self._build_camera_group),
+            ("Lighting", self._build_lighting_group),
+            ("Display", self._build_display_group),
+            ("Parallax", self._build_parallax_group),
+            ("Environment", self._build_environment_group),
+        )
+        for index, (title, build) in enumerate(pages):
+            btn = QPushButton(title)
+            btn.setCheckable(True)
+            btn.setProperty("role", "subtab")
+            btn.setStyleSheet("padding-left: 2px; padding-right: 2px;")
+            btn.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            btn.setMinimumWidth(0)
+            self._tab_group.addButton(btn, index)
+            tab_host_layout.addWidget(btn, btn.fontMetrics().horizontalAdvance(title) + 16)
 
-        layout.addLayout(col1, 1)
-        layout.addLayout(col2, 1)
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.Shape.NoFrame)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            page = QWidget()
+            page_layout = QVBoxLayout(page)
+            page_layout.setContentsMargins(8, 4, 8, 8)
+            page_layout.addWidget(build())
+            page_layout.addStretch(1)
+            scroll.setWidget(page)
+            self._stack.addWidget(scroll)
+        if not IS_MAC:
+            tabs_row.addStretch(1)
 
-        scroll.setWidget(content)
-        outer.addWidget(scroll)
+        self._tab_group.button(0).setChecked(True)
+        self._tab_group.idClicked.connect(self._stack.setCurrentIndex)
 
-    def _build_geometry_group(self) -> QGroupBox:
-        group = QGroupBox("Geometry")
+        outer.addLayout(tabs_row)
+        outer.addWidget(self._stack, 1)
+
+    def _build_geometry_group(self) -> QWidget:
+        group = QWidget()
         layout = QFormLayout(group)
 
         self.mesh_combo = QComboBox()
-        self.mesh_combo.addItems([MESH_LABELS["sphere"], MESH_LABELS["cube"], MESH_LABELS["plane"]])
+        self.mesh_combo.addItems([MESH_LABELS["plane"], MESH_LABELS["sphere"], MESH_LABELS["cube"]])
         self.mesh_combo.currentTextChanged.connect(self._emit_changed)
 
         layout.addRow("Mesh:", self.mesh_combo)
         return group
 
-    def _build_camera_group(self) -> QGroupBox:
-        group = QGroupBox("Camera")
+    def _build_camera_group(self) -> QWidget:
+        group = QWidget()
         layout = QFormLayout(group)
 
         self.fov_spin = QDoubleSpinBox()
@@ -127,8 +162,8 @@ class PreviewPropertiesPanel(QWidget):
         layout.addRow("", reset_pivot_btn)
         return group
 
-    def _build_lighting_group(self) -> QGroupBox:
-        group = QGroupBox("Lighting")
+    def _build_lighting_group(self) -> QWidget:
+        group = QWidget()
         layout = QFormLayout(group)
 
         self.light_intensity_spin = QDoubleSpinBox()
@@ -172,8 +207,8 @@ class PreviewPropertiesPanel(QWidget):
         layout.addRow("Light Elevation:", self.light_elevation_spin)
         return group
 
-    def _build_display_group(self) -> QGroupBox:
-        group = QGroupBox("Display")
+    def _build_display_group(self) -> QWidget:
+        group = QWidget()
         layout = QFormLayout(group)
 
         self.show_grid_checkbox = QCheckBox()
@@ -200,8 +235,8 @@ class PreviewPropertiesPanel(QWidget):
         layout.addRow("UV Tiling:", self.uv_tiling_spin)
         return group
 
-    def _build_parallax_group(self) -> QGroupBox:
-        group = QGroupBox("Parallax Occlusion")
+    def _build_parallax_group(self) -> QWidget:
+        group = QWidget()
         layout = QFormLayout(group)
 
         self.pom_enabled_checkbox = QCheckBox()
@@ -229,8 +264,8 @@ class PreviewPropertiesPanel(QWidget):
         layout.addRow("Quality:", self.pom_quality_spin)
         return group
 
-    def _build_environment_group(self) -> QGroupBox:
-        group = QGroupBox("Environment")
+    def _build_environment_group(self) -> QWidget:
+        group = QWidget()
         layout = QFormLayout(group)
 
         hdri_row = QHBoxLayout()
@@ -277,7 +312,7 @@ class PreviewPropertiesPanel(QWidget):
 
     def get_settings(self) -> dict:
         return {
-            "mesh": MESH_VALUES.get(self.mesh_combo.currentText(), "sphere"),
+            "mesh": MESH_VALUES.get(self.mesh_combo.currentText(), DEFAULT_MESH),
             "fov": self.fov_spin.value(),
             "distance": self.distance_spin.value(),
             "rotation_speed": self.rotation_speed_spin.value(),
@@ -303,7 +338,7 @@ class PreviewPropertiesPanel(QWidget):
     def apply_settings(self, data: dict) -> None:
         if not data:
             return
-        self.mesh_combo.setCurrentText(MESH_LABELS.get(data.get("mesh", "sphere"), MESH_LABELS["sphere"]))
+        self.mesh_combo.setCurrentText(MESH_LABELS.get(data.get("mesh", DEFAULT_MESH), MESH_LABELS[DEFAULT_MESH]))
         self.fov_spin.setValue(data.get("fov", self.fov_spin.value()))
         self.distance_spin.setValue(data.get("distance", self.distance_spin.value()))
         self.rotation_speed_spin.setValue(data.get("rotation_speed", self.rotation_speed_spin.value()))

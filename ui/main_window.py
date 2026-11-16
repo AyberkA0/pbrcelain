@@ -6,7 +6,7 @@ from typing import Optional
 
 import numpy as np
 from PIL import Image
-from PyQt6.QtCore import QSettings, QSize, QTimer, Qt
+from PyQt6.QtCore import QSettings, QSize, QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QKeySequence, QImage, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
@@ -106,6 +106,39 @@ MAX_RECENT_PROJECTS = 8
 
 def _heading(text: str) -> str:
     return text if PLATFORM_THEME == "legacy" else text.title()
+
+
+_VIEW_OPTIONS_EXPANDED_KEY = "window/viewOptionsExpanded"
+QWIDGETSIZE_MAX = 16777215
+
+
+class _ToggleHeading(QLabel):
+    toggled = pyqtSignal(bool)
+
+    def __init__(self, title: str, parent=None):
+        super().__init__(parent)
+        self._title = title
+        self._expanded = True
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._refresh()
+
+    def is_expanded(self) -> bool:
+        return self._expanded
+
+    def set_expanded(self, expanded: bool) -> None:
+        if expanded == self._expanded:
+            return
+        self._expanded = expanded
+        self._refresh()
+        self.toggled.emit(expanded)
+
+    def _refresh(self) -> None:
+        self.setText(("\u25be  " if self._expanded else "\u25b8  ") + self._title)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.set_expanded(not self._expanded)
+        super().mouseReleaseEvent(event)
 
 
 class MainWindow(QMainWindow):
@@ -497,8 +530,13 @@ class MainWindow(QMainWindow):
         bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.setSpacing(0)
 
-        preview_heading = QLabel(_heading("VIEW OPTIONS"))
+        preview_heading = _ToggleHeading(_heading("VIEW OPTIONS"))
         preview_heading.setProperty("role", "panel-heading")
+        preview_heading.setToolTip("Click to show or hide the view options")
+        preview_heading.toggled.connect(self._set_view_options_expanded)
+        self._view_options_heading = preview_heading
+        self._view_options_pane = bottom_pane
+        self._view_options_sizes: Optional[list[int]] = None
         bottom_layout.addWidget(preview_heading)
 
         self.preview_properties_panel = PreviewPropertiesPanel()
@@ -521,6 +559,27 @@ class MainWindow(QMainWindow):
         self._preview_splitter = splitter
         return splitter
 
+    def _set_view_options_expanded(self, expanded: bool) -> None:
+        splitter = self._preview_splitter
+        pane = self._view_options_pane
+        if expanded:
+            pane.setMaximumHeight(QWIDGETSIZE_MAX)
+            self.preview_properties_panel.setVisible(True)
+            sizes = self._view_options_sizes
+            if not sizes or sizes[1] < 160:
+                total = sum(splitter.sizes())
+                sizes = [max(total - 240, 160), 240]
+            splitter.setSizes(sizes)
+        else:
+            self._view_options_sizes = splitter.sizes()
+            self.preview_properties_panel.setVisible(False)
+            heading_height = self._view_options_heading.sizeHint().height()
+            pane.setMaximumHeight(heading_height)
+            total = sum(self._view_options_sizes)
+            splitter.setSizes([total - heading_height, heading_height])
+        splitter.handle(1).setEnabled(expanded)
+        QSettings().setValue(_VIEW_OPTIONS_EXPANDED_KEY, expanded)
+
     def showEvent(self, event) -> None:
         super().showEvent(event)
         if self._initial_layout_done or PLATFORM_THEME == "legacy":
@@ -531,6 +590,8 @@ class MainWindow(QMainWindow):
                 self, self._main_splitter, self._preview_splitter,
                 sidebar_ratio=pick(mac=0.34, windows=0.32), sidebar_min=pick(mac=440, windows=420), sidebar_max=640,
             )
+        if QSettings().value(_VIEW_OPTIONS_EXPANDED_KEY, True, type=bool) is False:
+            self._view_options_heading.set_expanded(False)
         if IS_WINDOWS:
             from ui.win_window import TaskbarProgress
 
