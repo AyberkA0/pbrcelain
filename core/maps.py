@@ -24,7 +24,7 @@ MAP_TYPE_LABELS: dict[MapType, str] = {
     MapType.HEIGHT: "Height",
     MapType.NORMAL: "Normal",
     MapType.ROUGHNESS: "Roughness",
-    MapType.AO: "Ambient Occlusion",
+    MapType.AO: "AO",
 }
 
 GENERATABLE_MAP_TYPES: set[MapType] = {
