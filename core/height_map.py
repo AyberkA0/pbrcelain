@@ -368,14 +368,11 @@ def apply_crevice_suppression(normed: np.ndarray, strength: float, radius_pct: f
     blackhat = cv2.morphologyEx(normed, cv2.MORPH_BLACKHAT, kernel)
     tophat = cv2.morphologyEx(normed, cv2.MORPH_TOPHAT, kernel)
 
-    out = np.copy(normed)
     if strength > 0.0:
-        joint_suppression = tophat * (strength * 1.2) + blackhat * (strength * 0.8)
-        brick_boost = (1.0 - np.clip(tophat + blackhat, 0.0, 1.0)) * (strength * 0.4)
-        out = out - joint_suppression + brick_boost
+        out = normed - blackhat * (strength * 1.2) - tophat * min(strength * 1.6, 1.0)
     else:
-        s = abs(strength)
-        out = out + blackhat * (s * 1.0) - tophat * (s * 0.8)
+        soften = min(abs(strength) * 0.5, 1.0) * 0.5
+        out = normed + (blackhat - tophat) * soften
 
     lo = float(np.percentile(out, 0.5))
     hi = float(np.percentile(out, 99.5))

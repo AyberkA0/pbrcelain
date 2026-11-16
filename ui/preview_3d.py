@@ -106,6 +106,7 @@ uniform sampler2D uAOTex;
 uniform bool uHasAO;
 uniform bool uPOMEnabled;
 uniform float uPOMHeightScale;
+uniform float uPOMRefHeight;
 uniform int uPOMMaxLayers;
 uniform bool uSkyAmbient;
 
@@ -127,10 +128,10 @@ vec2 parallaxOcclusionMapping(vec2 texCoords, vec3 viewDirTS) {
         * (uPOMHeightScale / layerCount);
 
     float currentLayerDepth = 0.0;
-    vec2 currentUV = texCoords;
+    vec2 currentUV = texCoords + deltaUV * layerCount * (1.0 - uPOMRefHeight);
     float sampledDepth = 1.0 - texture(uHeightTex, currentUV).r;
     if (sampledDepth <= 0.0) {
-        return texCoords;
+        return currentUV;
     }
     for (int i = 0; i < 64; ++i) {
         if (float(i) >= layerCount || currentLayerDepth >= sampledDepth) {
@@ -432,6 +433,7 @@ class Preview3DWidget(QOpenGLWidget):
         self._normal_source: Optional[Image.Image] = None
         self._roughness_source: Optional[Image.Image] = None
         self._height_source: Optional[Image.Image] = None
+        self._height_ref: float = 1.0
         self._ao_source: Optional[Image.Image] = None
         self._texture_upload_needed: set[str] = set()
         self._roughness_value = 0.5
@@ -478,8 +480,10 @@ class Preview3DWidget(QOpenGLWidget):
                     self._height_image = Image.fromarray(arr, mode="L")
                 else:
                     self._height_image = height.convert("L")
+                self._height_ref = float(np.asarray(self._height_image, dtype=np.float32).mean() / 255.0)
             else:
                 self._height_image = None
+                self._height_ref = 1.0
             changed.add("height")
         if ao is not self._ao_source:
             self._ao_source = ao
@@ -543,7 +547,7 @@ class Preview3DWidget(QOpenGLWidget):
             "uModel", "uView", "uProj", "uCamPos", "uLightDir", "uLightIntensity",
             "uEnvIntensity", "uExposure", "uAmbientColor", "uRoughnessValue",
             "uHasAlbedo", "uHasNormal", "uHasRoughnessTex",
-            "uHasHeight", "uPOMEnabled", "uPOMHeightScale", "uPOMMaxLayers",
+            "uHasHeight", "uPOMEnabled", "uPOMHeightScale", "uPOMRefHeight", "uPOMMaxLayers",
             "uAlbedoTex", "uNormalTex", "uRoughnessTex", "uHeightTex", "uUVScale",
             "uAOTex", "uHasAO", "uSkyAmbient",
         ])
@@ -788,6 +792,7 @@ class Preview3DWidget(QOpenGLWidget):
         gl.glUniform1i(u["uHasAO"], 1 if self._ao_image is not None else 0)
         gl.glUniform1i(u["uPOMEnabled"], 1 if self._settings.get("pom_enabled", True) else 0)
         gl.glUniform1f(u["uPOMHeightScale"], self._settings.get("pom_height_scale", 0.04))
+        gl.glUniform1f(u["uPOMRefHeight"], self._height_ref)
         gl.glUniform1i(u["uPOMMaxLayers"], self._settings.get("pom_max_layers", 32))
         gl.glUniform1f(u["uUVScale"], float(self._settings.get("uv_tiling", 1.0)))
 
