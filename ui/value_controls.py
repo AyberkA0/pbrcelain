@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QEvent, QObject, QPointF, Qt
+from PyQt6.QtCore import QEvent, QObject, QPointF, QSize, Qt
 from PyQt6.QtWidgets import (
     QAbstractScrollArea,
     QAbstractSpinBox,
@@ -195,6 +195,87 @@ class _SpinSlider(QSlider):
         if obj is self._spin and event.type() == QEvent.Type.EnabledChange:
             self.setEnabled(_own_enabled(self._spin))
         return False
+
+    # -- look: thin rounded track, accent fill, round white thumb (macOS style)
+
+    _TRACK = 4.0
+    _THUMB = 16.0
+
+    def sizeHint(self) -> QSize:
+        return QSize(120, int(self._THUMB) + 6)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(40, int(self._THUMB) + 6)
+
+    def _fraction(self) -> float:
+        span = self.maximum() - self.minimum()
+        return 0.0 if span <= 0 else (self.value() - self.minimum()) / span
+
+    def _travel(self) -> tuple[float, float]:
+        half = self._THUMB / 2 + 1
+        return half, self.width() - half
+
+    def _value_at(self, x: float) -> int:
+        left, right = self._travel()
+        t = min(1.0, max(0.0, (x - left) / max(1.0, right - left)))
+        return int(round(self.minimum() + t * (self.maximum() - self.minimum())))
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        self.setSliderDown(True)
+        self.setValue(self._value_at(event.position().x()))
+        self.update()
+
+    def mouseMoveEvent(self, event) -> None:
+        if self.isSliderDown():
+            self.setValue(self._value_at(event.position().x()))
+
+    def mouseReleaseEvent(self, event) -> None:
+        self.setSliderDown(False)
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        from PyQt6.QtCore import QRectF
+        from PyQt6.QtGui import QColor, QPainter, QPalette, QPen
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pal = self.palette()
+        enabled = self.isEnabled()
+        text = pal.color(QPalette.ColorRole.WindowText)
+
+        track = QColor(text)
+        track.setAlphaF(0.18 if enabled else 0.08)
+        accent = QColor(pal.color(QPalette.ColorRole.Accent))
+        if not accent.isValid() or accent.alpha() == 0:
+            accent = QColor(pal.color(QPalette.ColorRole.Highlight))
+        if not enabled:
+            accent = QColor(text)
+            accent.setAlphaF(0.25)
+
+        left, right = self._travel()
+        cy = self.height() / 2
+        x = left + (right - left) * self._fraction()
+        r = self._TRACK / 2
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(track)
+        painter.drawRoundedRect(QRectF(left - r, cy - r, right - left + self._TRACK, self._TRACK), r, r)
+        painter.setBrush(accent)
+        painter.drawRoundedRect(QRectF(left - r, cy - r, x - left + self._TRACK, self._TRACK), r, r)
+
+        thumb = QRectF(x - self._THUMB / 2, cy - self._THUMB / 2, self._THUMB, self._THUMB)
+        shadow = QColor(0, 0, 0, 70 if enabled else 30)
+        painter.setBrush(shadow)
+        painter.drawEllipse(thumb.translated(0, 0.8))
+        face = QColor("#f2f2f2") if enabled else QColor("#7a7a7a")
+        if enabled and self.isSliderDown():
+            face = QColor("#d9d9d9")
+        painter.setBrush(face)
+        painter.setPen(QPen(QColor(0, 0, 0, 40), 0.6))
+        painter.drawEllipse(thumb.adjusted(0.5, 0.5, -0.5, -0.5))
+        painter.end()
 
 
 def slider_field(spin: QAbstractSpinBox, stacked: bool) -> QWidget:
