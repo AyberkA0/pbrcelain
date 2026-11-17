@@ -54,7 +54,7 @@ Materials generated from single photos, previewed in the built-in 3D viewport.
 Ready-to-run builds for **macOS (Apple Silicon)** and **Windows (64-bit)** are on the
 [Releases page](https://github.com/AyberkA0/pbrcelain/releases) — no Python needed.
 The app itself is a small download; the AI components (about 160 MB) are
-downloaded once, the first time you create a Height map. The Windows build runs
+downloaded once, the first time you generate a Height map. The Windows build runs
 depth models on the CPU; for NVIDIA GPU acceleration, [run it from source](docs/DEVELOPMENT.md).
 
 ### First launch on macOS
@@ -76,18 +76,32 @@ xattr -dr com.apple.quarantine /Applications/PBRCELAIN.app
 ## Getting started
 
 1. **Import a photo** into the Albedo slot (the one that pulses).
-2. Select the **Height** slot and click **Create Height from Albedo**. The first run
+2. Select the **Height** slot and click **Generate Height**. The first run
    downloads the AI components and the depth model.
-3. Create **Normal**, **Roughness** and **AO** the same way, fine-tune them on the
+3. Generate **Normal**, **Roughness** and **Ambient Occlusion** the same way, fine-tune them on the
    **Adjustment** page, then use **Export** to write every map to a folder.
 
 Hover over any setting to see what it does. Projects are saved as `.pcln` files that
 keep everything, so you can reopen and keep adjusting without re-running the model.
 
+## Use from scripts and AI agents
+
+PBRCELAIN also runs without its window, so scripts and LLM agents (Claude Code,
+Cursor, Codex…) can generate maps with one command and read a JSON answer:
+
+```bash
+PBRCELAIN generate photo.jpg --out maps/
+```
+
+No extra setup: it is the same app binary (on macOS,
+`/Applications/PBRCELAIN.app/Contents/MacOS/PBRCELAIN`). See the
+[command line guide](docs/CLI.md) for every option.
+
 ## Learn more
 
 - [How it works](docs/HOW-IT-WORKS.md): the depth models, high-resolution and seamless
   generation, artifact correction, and how each map is derived.
+- [Command line](docs/CLI.md): generating maps from scripts and AI agents.
 - [Running from source](docs/DEVELOPMENT.md): installing with Python, GPU setup,
   file associations and project file details.
 

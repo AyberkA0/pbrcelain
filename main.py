@@ -11,6 +11,9 @@ if sys.platform == "darwin":
 def _redirect_missing_std_streams() -> None:
     if sys.stdout is not None and sys.stderr is not None:
         return
+    if multiprocessing.parent_process() is not None:
+        # The depth model's helper process must not truncate the app's log.
+        return
     if sys.platform == "darwin":
         log_dir = os.path.expanduser("~/Library/Logs/PBRCELAIN")
     else:
@@ -115,4 +118,10 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # `pbrcelain generate …` and friends run headless (see headless.py) and never
+    # open a window, so scripts and LLM agents can use the same app binary.
+    import headless
+
+    if headless.is_cli_invocation(sys.argv):
+        sys.exit(headless.run(sys.argv))
     sys.exit(main())
