@@ -28,7 +28,7 @@ class AlbedoPanel(GeneratePropertiesContainer):
         self.generate_page.add_wide(gen_info)
         self.generate_page.add_stretch()
 
-        self.wb_cb = QCheckBox("Auto White Balance")
+        self.wb_cb = QCheckBox("Remove color cast")
         self.wb_cb.setToolTip("Neutralize undesirable yellow/blue color cast using gray-world normalization.")
         self.wb_cb.stateChanged.connect(self.propertiesChanged.emit)
         self.properties_page.add_section("Auto White Balance", toggle=self.wb_cb)
@@ -38,9 +38,10 @@ class AlbedoPanel(GeneratePropertiesContainer):
         self.wb_strength_spin.setSingleStep(0.05)
         self.wb_strength_spin.setValue(0.70)
         self.wb_strength_spin.valueChanged.connect(self.propertiesChanged.emit)
-        self.properties_page.add_param("Neutralize strength", self.wb_strength_spin)
+        self.wb_strength_spin.setToolTip("How much of the color cast is removed. 1 removes it fully.")
+        self.properties_page.add_param("Correction strength", self.wb_strength_spin)
 
-        self.shift_enabled_cb = QCheckBox("Enable Color Shift")
+        self.shift_enabled_cb = QCheckBox("Change a color")
         self.shift_enabled_cb.stateChanged.connect(self._on_shift_toggled)
         self.shift_enabled_cb.stateChanged.connect(self.propertiesChanged.emit)
         self.properties_page.add_section("Color Range Shift", toggle=self.shift_enabled_cb)
@@ -51,7 +52,8 @@ class AlbedoPanel(GeneratePropertiesContainer):
         self.src_color_btn.setMinimumWidth(56)
         self._update_btn_color(self.src_color_btn, self.source_color)
         self.src_color_btn.clicked.connect(self._pick_source_color)
-        self.properties_page.add_param("Source color", self.src_color_btn)
+        self.src_color_btn.setToolTip("Pick the color in the photo you want to replace.")
+        self.properties_page.add_param("Color to change", self.src_color_btn)
 
         self.target_color = QColor(120, 120, 120)
         self.dst_color_btn = QPushButton()
@@ -59,7 +61,8 @@ class AlbedoPanel(GeneratePropertiesContainer):
         self.dst_color_btn.setMinimumWidth(56)
         self._update_btn_color(self.dst_color_btn, self.target_color)
         self.dst_color_btn.clicked.connect(self._pick_target_color)
-        self.properties_page.add_param("Target color", self.dst_color_btn)
+        self.dst_color_btn.setToolTip("The color the picked color becomes.")
+        self.properties_page.add_param("Change it to", self.dst_color_btn)
 
         self.tolerance_spin = QDoubleSpinBox()
         self.tolerance_spin.setRange(1.0, 255.0)
@@ -71,7 +74,7 @@ class AlbedoPanel(GeneratePropertiesContainer):
             "The closer a pixel is to the source color, the more it shifts."
         )
         self.tolerance_spin.valueChanged.connect(self.propertiesChanged.emit)
-        self.properties_page.add_param("Range (tolerance)", self.tolerance_spin)
+        self.properties_page.add_param("Color range", self.tolerance_spin)
 
         self.falloff_spin = QDoubleSpinBox()
         self.falloff_spin.setRange(0.2, 3.0)
@@ -86,7 +89,7 @@ class AlbedoPanel(GeneratePropertiesContainer):
         self.falloff_spin.valueChanged.connect(self.propertiesChanged.emit)
         self.properties_page.add_param("Soft falloff", self.falloff_spin)
 
-        self.seamless_cb = QCheckBox("Make Seamless (Tileable)")
+        self.seamless_cb = QCheckBox("Make seamless (tileable)")
         self.seamless_cb.setToolTip("Blends opposing boundary strips to produce matching edges for infinite repeats.")
         self.seamless_cb.stateChanged.connect(self.propertiesChanged.emit)
         self.properties_page.add_section("Seamless Tiling", toggle=self.seamless_cb)
@@ -97,7 +100,7 @@ class AlbedoPanel(GeneratePropertiesContainer):
         self.seamless_overlap_spin.setValue(10.0)
         self.seamless_overlap_spin.setToolTip("Percentage of the border width used for smooth cross-fading.")
         self.seamless_overlap_spin.valueChanged.connect(self.propertiesChanged.emit)
-        self.properties_page.add_param("Border overlap (%)", self.seamless_overlap_spin)
+        self.properties_page.add_param("Blend width (%)", self.seamless_overlap_spin)
 
         self.properties_page.end_section()
 

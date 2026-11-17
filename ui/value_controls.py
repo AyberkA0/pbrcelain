@@ -139,12 +139,18 @@ def attach_scrub(label: QLabel, spin: QAbstractSpinBox) -> None:
     _Scrubber(label, spin)
 
 
+def _own_enabled(spin) -> bool:
+    """Whether the spin box itself was disabled, ignoring a disabled parent.
+    Copying isEnabled() would force-disable the control when its section is
+    switched off, and it would then stay disabled when the section comes back."""
+    return not spin.testAttribute(Qt.WidgetAttribute.WA_ForceDisabled)
+
+
 def wants_slider(spin: QAbstractSpinBox) -> bool:
-    span = spin.maximum() - spin.minimum()
-    if isinstance(spin, QDoubleSpinBox):
-        return 0 < span <= 10.0
-    if isinstance(spin, QSpinBox):
-        return 0 < span <= 100
+    # Every bounded number gets the same control (knob in sections, slider
+    # inline) so equal kinds of value never look different.
+    if isinstance(spin, (QDoubleSpinBox, QSpinBox)):
+        return spin.maximum() - spin.minimum() > 0
     return False
 
 
@@ -165,7 +171,7 @@ class _SpinSlider(QSlider):
         spin.valueChanged.connect(self._sync)
         self.valueChanged.connect(self._push)
         spin.installEventFilter(self)
-        self.setEnabled(spin.isEnabled())
+        self.setEnabled(_own_enabled(spin))
 
     def _to_slider(self, value: float) -> int:
         if self._int:
@@ -187,7 +193,7 @@ class _SpinSlider(QSlider):
 
     def eventFilter(self, obj, event) -> bool:
         if obj is self._spin and event.type() == QEvent.Type.EnabledChange:
-            self.setEnabled(self._spin.isEnabled())
+            self.setEnabled(_own_enabled(self._spin))
         return False
 
 
@@ -246,7 +252,7 @@ class Knob(QWidget):
         tip = spin.toolTip()
         hint = "Drag up/down to turn (Option: fine, Shift: coarse). Double-click to reset."
         self.setToolTip(f"{tip}\n\n{hint}" if tip else hint)
-        self.setEnabled(spin.isEnabled())
+        self.setEnabled(_own_enabled(spin))
 
     def _set(self, value: float) -> None:
         # QSpinBox only accepts ints; a float raises and would abort the app.
@@ -269,7 +275,7 @@ class Knob(QWidget):
 
     def eventFilter(self, obj, event) -> bool:
         if obj is self._spin and event.type() == QEvent.Type.EnabledChange:
-            self.setEnabled(self._spin.isEnabled())
+            self.setEnabled(_own_enabled(self._spin))
             self.update()
         return False
 

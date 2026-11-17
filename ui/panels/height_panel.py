@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.depth_models import MODEL_CATALOG
+from core.depth_models import LEGACY_VARIANTS, MODEL_CATALOG
 from core.height_map import (
     DEFAULT_BOWL_CURVE,
     DETREND_HIGHPASS,
@@ -65,7 +65,7 @@ class HeightPanel(GeneratePropertiesContainer):
         self._raw_source_provider = None
 
         self.note_label = QLabel(
-            "No Albedo source yet, so Generate Map has nothing to work from "
+            "No Albedo source yet, so the button below has nothing to work from "
             "(you can still import a Height image directly instead)."
         )
         self.note_label.setWordWrap(True)
@@ -93,16 +93,22 @@ class HeightPanel(GeneratePropertiesContainer):
         self.family_combo = QComboBox()
         self.family_combo.addItems(list(MODEL_CATALOG.keys()))
         self.family_combo.currentTextChanged.connect(self._on_family_changed)
-        page.add_param("Family", self.family_combo)
+        self.family_combo.setToolTip("Which AI depth model estimates the relief.")
+        page.add_param("Model", self.family_combo)
 
         self.variant_combo = QComboBox()
         self.variant_combo.currentTextChanged.connect(self.modelSettingsChanged.emit)
-        page.add_param("Variant", self.variant_combo)
+        self.variant_combo.setToolTip(
+            "Larger models give more detail but are slower and need more memory.\n"
+            "Depth Anything V2 Base and Large may only be used for non-commercial work (CC BY-NC 4.0)."
+        )
+        page.add_param("Size", self.variant_combo)
 
         self.device_combo = QComboBox()
         self.device_combo.addItems(list(DEVICE_MAP.keys()))
         self.device_combo.currentTextChanged.connect(self.modelSettingsChanged.emit)
-        page.add_param("Device", self.device_combo)
+        self.device_combo.setToolTip("Where the model runs. GPU is much faster when available.")
+        page.add_param("Run on", self.device_combo)
 
 
         self._on_family_changed(self.family_combo.currentText())
@@ -145,7 +151,7 @@ class HeightPanel(GeneratePropertiesContainer):
 
     def _build_chunk_group(self) -> None:
         page = self.generate_page
-        self.chunk_checkbox = QCheckBox("Enable chunk estimation (high resolution)")
+        self.chunk_checkbox = QCheckBox("Process in tiles (sharper at high resolution)")
         self.chunk_checkbox.setToolTip(
             "Runs one full-image reference pass, then re-runs the model on\n"
             "overlapping crops at its native resolution for sharp micro-details.\n"
@@ -154,40 +160,18 @@ class HeightPanel(GeneratePropertiesContainer):
         self.chunk_checkbox.stateChanged.connect(self._on_chunk_toggled)
         page.add_section("Chunk Estimation", toggle=self.chunk_checkbox)
 
-        batch_container = QWidget()
-        batch_layout = QHBoxLayout(batch_container)
-        batch_layout.setContentsMargins(0, 0, 0, 0)
-        batch_layout.setSpacing(6)
-
         self.chunk_batch_spin = QSpinBox()
         self.chunk_batch_spin.setRange(1, 16)
         self.chunk_batch_spin.setValue(1)
-        batch_layout.addWidget(self.chunk_batch_spin, 1)
-
-        self.batch_info_label = QLabel("ⓘ")
-        self.batch_info_label.setCursor(Qt.CursorShape.WhatsThisCursor)
-        legacy_style(self.batch_info_label, """
-            QLabel {
-                color: #1473e6;
-                font-size: 14px;
-                font-weight: bold;
-                padding: 0 4px;
-            }
-            QLabel:hover {
-                color: #2688f2;
-            }
-        """, "info-icon")
-        tooltip_text = (
-            "Chunk Batch Size (Parallel Processing):\n\n"
-            "• High-end GPU (8GB+ VRAM): Set to 2 or 4 to significantly speed up inference.\n"
-            "• Mid-range / Entry GPU (4–6GB VRAM): 1 or 2 recommended to prevent Out-of-Memory (OOM).\n"
-            "• CPU Mode: Leave set to 1."
+        self.chunk_batch_spin.setToolTip(
+            "How many tiles the model works on at the same time. Higher is faster but needs more GPU memory.\n"
+            "Graphics card with 8 GB or more: 2 to 4. Smaller cards: 1 or 2. On the CPU: 1."
         )
-        self.batch_info_label.setToolTip(tooltip_text)
-        self.chunk_batch_spin.setToolTip(tooltip_text)
-        batch_layout.addWidget(self.batch_info_label)
+        # Kept for code that enables/disables it alongside the spin box; the label's tooltip replaces the icon.
+        self.batch_info_label = QLabel()
+        self.batch_info_label.hide()
 
-        page.add_param("Batch size", batch_container)
+        page.add_param("Tiles at once", self.chunk_batch_spin)
 
         self.effort_combo = QComboBox()
         self.effort_combo.addItems(["ultra", "high", "medium", "low"])
@@ -199,7 +183,8 @@ class HeightPanel(GeneratePropertiesContainer):
             "• medium (1.5x tile size): Larger chunks, faster processing.\n"
             "• low (2.0x tile size): Maximum chunk size, fastest estimation."
         )
-        page.add_param("Effort", self.effort_combo)
+        self.effort_combo.setToolTip("Higher quality takes longer.")
+        page.add_param("Quality", self.effort_combo)
 
         self._on_chunk_toggled()
 
@@ -288,18 +273,21 @@ class HeightPanel(GeneratePropertiesContainer):
         self.detrend_combo.setCurrentText("Remove bowl/dome (recommended)")
         self.detrend_combo.currentTextChanged.connect(self._on_detrend_mode_changed)
         self.detrend_combo.currentTextChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Flatten curvature", self.detrend_combo)
+        self.detrend_combo.setToolTip("Photos often make a flat surface look bowed or tilted. This flattens it.")
+        page.add_param("Remove bending", self.detrend_combo)
 
         self.detrend_radius_spin = QDoubleSpinBox()
         self.detrend_radius_spin.setRange(1.0, 50.0)
         self.detrend_radius_spin.setValue(8.0)
         self.detrend_radius_spin.setSuffix(" %")
         self.detrend_radius_spin.valueChanged.connect(self.propertiesChanged.emit)
-        self._detrend_radius_field = page.add_param("Flatten radius", self.detrend_radius_spin)
+        self.detrend_radius_spin.setToolTip("Size of the shapes treated as unwanted bending, in % of the image. Smaller flattens more.")
+        self._detrend_radius_field = page.add_param("Flatten size", self.detrend_radius_spin)
 
         self.edit_curve_btn = QPushButton("Edit Curve…")
         self.edit_curve_btn.clicked.connect(self._open_curve_editor)
-        self._edit_curve_field = page.add_param("Bowl correction", self.edit_curve_btn, share_cell=True)
+        self.edit_curve_btn.setToolTip("Draw how much bending to remove from the center to the edges.")
+        self._edit_curve_field = page.add_param("Correction curve", self.edit_curve_btn, share_cell=True)
 
         self.invert_checkbox = QCheckBox("Invert")
         self.invert_checkbox.setToolTip("Swap near and far: raised areas become recessed and vice versa.")
@@ -311,7 +299,8 @@ class HeightPanel(GeneratePropertiesContainer):
         self.gamma_spin.setSingleStep(0.05)
         self.gamma_spin.setValue(1.0)
         self.gamma_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Gamma", self.gamma_spin)
+        self.gamma_spin.setToolTip("Below 1 raises the middle heights, above 1 lowers them. Highest and lowest points stay put.")
+        page.add_param("Midtones", self.gamma_spin)
 
         page.add_section("Relief & Crevice Calibration")
 
@@ -325,7 +314,8 @@ class HeightPanel(GeneratePropertiesContainer):
             "forcing all brick reliefs onto the same horizontal plane."
         )
         self.local_eq_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Local equalization", self.local_eq_spin)
+        self.local_eq_spin.setToolTip("Puts all bumps on the same level, removing large slopes and lighting differences.")
+        page.add_param("Level out", self.local_eq_spin)
 
         self.crevice_spin = QDoubleSpinBox()
         self.crevice_spin.setRange(-2.0, 3.0)
@@ -337,7 +327,8 @@ class HeightPanel(GeneratePropertiesContainer):
             "< 0 softens joint depth."
         )
         self.crevice_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Crevice depth", self.crevice_spin)
+        self.crevice_spin.setToolTip("Above 0 pushes gaps (like mortar between bricks) deeper. Below 0 makes them shallower.")
+        page.add_param("Deepen cracks", self.crevice_spin)
 
         self.albedo_guidance_spin = QDoubleSpinBox()
         self.albedo_guidance_spin.setRange(0.0, 1.0)
@@ -349,14 +340,16 @@ class HeightPanel(GeneratePropertiesContainer):
             "to clamp joint lines to the bottom floor."
         )
         self.albedo_guidance_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Albedo guidance", self.albedo_guidance_spin)
+        self.albedo_guidance_spin.setToolTip("Uses color edges in the photo to keep gaps at the bottom. Helps with bricks and tiles.")
+        page.add_param("Use photo edges", self.albedo_guidance_spin)
 
         page.add_section("Fine Tuning")
 
         self.blur_spin = QSpinBox()
         self.blur_spin.setRange(0, 25)
         self.blur_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Smoothing (blur px)", self.blur_spin)
+        self.blur_spin.setToolTip("Blurs the height map to remove noise.")
+        page.add_param("Smoothing (px)", self.blur_spin)
 
         self.low_pct_spin = QDoubleSpinBox()
         self.low_pct_spin.setRange(0.0, 49.0)
@@ -364,7 +357,8 @@ class HeightPanel(GeneratePropertiesContainer):
         self.low_pct_spin.setValue(1.0)
         self.low_pct_spin.valueChanged.connect(self.propertiesChanged.emit)
         self.low_pct_spin.setSuffix(" %")
-        page.add_param("Clip low", Knob(self.low_pct_spin, default=1.0))
+        self.low_pct_spin.setToolTip("Darkest share of the surface (in %) that becomes the lowest point. Raises contrast.")
+        page.add_param("Black point", Knob(self.low_pct_spin, default=1.0))
 
         self.high_pct_spin = QDoubleSpinBox()
         self.high_pct_spin.setRange(51.0, 100.0)
@@ -372,7 +366,8 @@ class HeightPanel(GeneratePropertiesContainer):
         self.high_pct_spin.setValue(99.0)
         self.high_pct_spin.valueChanged.connect(self.propertiesChanged.emit)
         self.high_pct_spin.setSuffix(" %")
-        page.add_param("Clip high", Knob(self.high_pct_spin, default=99.0))
+        self.high_pct_spin.setToolTip("Brightest share of the surface (in %) that becomes the highest point. Raises contrast.")
+        page.add_param("White point", Knob(self.high_pct_spin, default=99.0))
 
         reset_btn = QPushButton("Reset to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)
@@ -400,7 +395,7 @@ class HeightPanel(GeneratePropertiesContainer):
 
         card_text = QLabel(
             "After fine-tuning adjustments (curve/bowl correction, relief, and guide filters) "
-            "to suit your image, re-generating the map (<b>Generate Map</b>) is recommended "
+            "to suit your image, creating the map again (<b>Create Height from Albedo</b>) is recommended "
             "for the highest-quality, full-resolution output."
         )
         card_text.setWordWrap(True)
@@ -535,7 +530,8 @@ class HeightPanel(GeneratePropertiesContainer):
         else:
             self.device_combo.setCurrentIndex(0)
         self.family_combo.setCurrentText(data.get("family", self.family_combo.currentText()))
-        self.variant_combo.setCurrentText(data.get("variant", self.variant_combo.currentText()))
+        variant = data.get("variant", self.variant_combo.currentText())
+        self.variant_combo.setCurrentText(LEGACY_VARIANTS.get(variant, variant))
         self.chunk_checkbox.setChecked(data.get("chunked", False))
         self.chunk_batch_spin.setValue(data.get("chunk_batch", self.chunk_batch_spin.value()))
         self.effort_combo.setCurrentText(data.get("effort", "high"))

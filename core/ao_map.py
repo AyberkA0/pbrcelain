@@ -32,12 +32,24 @@ def generate_ao_map(
     options: AOMapOptions | None = None,
 ) -> np.ndarray:
     options = options or AOMapOptions()
+    return finish_ao(occlusion_map(height, options), options)
+
+
+def occlusion_key(options: AOMapOptions) -> tuple:
+    """The settings occlusion_map depends on; the rest only affect finish_ao."""
+    return (options.method, options.radius, options.samples, options.surface_width_cm,
+            options.max_depth_mm, options.search_percent)
+
+
+def occlusion_map(height: np.ndarray, options: AOMapOptions) -> np.ndarray:
+    """The expensive part: raw occlusion, before strength/contrast/blur/invert."""
     h_arr = height.astype(np.float32)
     if options.method == AO_METHOD_RAYTRACED:
-        occlusion = _raytraced_occlusion(h_arr, options)
-    else:
-        occlusion = _classic_occlusion(h_arr, options)
+        return _raytraced_occlusion(h_arr, options)
+    return _classic_occlusion(h_arr, options)
 
+
+def finish_ao(occlusion: np.ndarray, options: AOMapOptions) -> np.ndarray:
     ao = 1.0 - np.clip(occlusion * options.strength, 0.0, 1.0)
     contrast = max(0.1, options.contrast)
     ao = np.power(ao, contrast)

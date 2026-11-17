@@ -105,6 +105,15 @@ def _image_to_normal_array(image: Image.Image) -> np.ndarray:
     return np.asarray(image.convert("RGB"), dtype=np.float32) / 255.0
 
 
+# The main button does something different on every map, so it says what.
+_GENERATE_LABELS = {
+    MapType.ALBEDO: ("Apply to Albedo", "Writes the white balance, color shift and seamless settings into the Albedo map."),
+    MapType.HEIGHT: ("Create Height from Albedo", "An AI depth model estimates the surface relief from the Albedo photo."),
+    MapType.NORMAL: ("Create Normal from Height", "Calculates surface direction from the Height map. Quick, no AI."),
+    MapType.ROUGHNESS: ("Create Roughness", "Estimates how matte or shiny each spot is from the Normal map and the photo."),
+    MapType.AO: ("Create AO from Height", "Calculates the soft contact shadows in cracks and corners from the Height map."),
+}
+
 RECENT_PROJECTS_KEY = "recentProjects"
 MAX_RECENT_PROJECTS = 8
 
@@ -624,6 +633,8 @@ class MainWindow(QMainWindow):
     def _refresh_material_header(self) -> None:
         if not hasattr(self, "material_name_label"):
             return
+        if getattr(self, "_bottom_bar_mode", None) == "generate" and hasattr(self, "generate_btn"):
+            self._update_generate_bar_mode("generate")
         name = os.path.splitext(os.path.basename(self.project_path))[0] if self.project_path else "Untitled"
         self.material_name_label.setText(f"{name} \u2014 Edited" if self.dirty and not IS_MAC else name)
         maps = [mt for mt in MAP_TYPE_ORDER if self._active_display_image(mt) is not None]
@@ -724,11 +735,11 @@ class MainWindow(QMainWindow):
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(6)
-        self.generate_btn = QPushButton("Generate Map")
+        self.generate_btn = QPushButton(_GENERATE_LABELS[MapType.ALBEDO][0])
         self.generate_btn.setProperty("role", "generate")
         self.generate_btn.clicked.connect(self._on_primary_btn_clicked)
 
-        self.kill_btn = QPushButton("Kill Process")
+        self.kill_btn = QPushButton("Stop")
         self.kill_btn.setProperty("role", "generate")
         self.kill_btn.setEnabled(False)
         self.kill_btn.setVisible(False)
@@ -1756,8 +1767,12 @@ class MainWindow(QMainWindow):
             self.kill_btn.setVisible(True)
             self._update_save_revert_enabled()
         else:
-            self.generate_btn.setText("Generate Map")
-            self.kill_btn.setText("Kill Process")
+            text, tip = _GENERATE_LABELS[self.current_map_type]
+            if self.current_map_type in self.generated_images and self.current_map_type != MapType.ALBEDO:
+                text = text.replace("Create", "Recreate", 1)
+            self.generate_btn.setText(text)
+            self.generate_btn.setToolTip(tip)
+            self.kill_btn.setText("Stop")
             busy = (
                 (self.infer_thread is not None and self.infer_thread.isRunning())
                 or (self.model_thread is not None and self.model_thread.isRunning())

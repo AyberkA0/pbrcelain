@@ -124,10 +124,15 @@ class PropertyPanel(QWidget):
             label.setWordWrap(True)
         v.addWidget(label)
         spin = find_spin(widget)
+        tip = widget.toolTip() or (spin.toolTip() if spin is not None else "")
+        if tip:
+            label.setToolTip(tip)
         field = widget
         if spin is not None:
             attach_scrub(label, spin)
-            if spin is widget and wants_slider(spin):
+            if isinstance(widget, Knob):
+                pass
+            elif spin is widget and wants_slider(spin):
                 field = slider_field(spin, stacked=False) if inline else Knob(spin, default=float(spin.value()))
         if isinstance(field, Knob):
             v.addWidget(field, 0, Qt.AlignmentFlag.AlignLeft)

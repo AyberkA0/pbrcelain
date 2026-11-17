@@ -9,14 +9,22 @@ from PIL import Image
 
 MODEL_CATALOG: dict[str, dict[str, str]] = {
     "Depth Anything V2": {
-        "Small (fast)": "depth-anything/Depth-Anything-V2-Small-hf",
+        "Small": "depth-anything/Depth-Anything-V2-Small-hf",
         "Base": "depth-anything/Depth-Anything-V2-Base-hf",
-        "Large (accurate)": "depth-anything/Depth-Anything-V2-Large-hf",
+        "Large": "depth-anything/Depth-Anything-V2-Large-hf",
     },
     "Marigold": {
-        "LCM (Fast & Ultra Detail)": "prs-eth/marigold-depth-lcm-v1-0",
-        "v1.1 (Standard Quality)": "prs-eth/marigold-depth-v1-1",
+        "Fast": "prs-eth/marigold-depth-lcm-v1-0",
+        "Standard": "prs-eth/marigold-depth-v1-1",
     },
+}
+
+# Names used by earlier versions, so saved projects keep their model.
+LEGACY_VARIANTS = {
+    "Small (fast)": "Small",
+    "Large (accurate)": "Large",
+    "LCM (Fast & Ultra Detail)": "Fast",
+    "v1.1 (Standard Quality)": "Standard",
 }
 
 FAMILY_NEAR_IS_LARGE: dict[str, bool] = {

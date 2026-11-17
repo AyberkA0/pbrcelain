@@ -29,7 +29,7 @@ class RoughnessPanel(GeneratePropertiesContainer):
         self._underlay_provider: Callable[[], tuple[Image.Image | None, Image.Image | None, Image.Image | None]] | None = None
 
         self.note_label = QLabel(
-            "No Normal map yet, so Generate Map has nothing to work from "
+            "No Normal map yet, so the button below has nothing to work from "
             "(you can still import a Roughness map directly instead)."
         )
         self.note_label.setWordWrap(True)
@@ -39,7 +39,8 @@ class RoughnessPanel(GeneratePropertiesContainer):
         self.preset_combo = QComboBox()
         self.preset_combo.addItems(list(ROUGHNESS_PRESETS.keys()))
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
-        self.generate_page.add_param("Material type", self.preset_combo, wide=True)
+        self.preset_combo.setToolTip("Sets sensible starting values for this kind of surface.")
+        self.generate_page.add_param("Material", self.preset_combo, wide=True)
 
         self.generate_page.add_section("Hybrid Source Blending")
         self.height_cavity_spin = QDoubleSpinBox()
@@ -52,7 +53,8 @@ class RoughnessPanel(GeneratePropertiesContainer):
             "< 0: Depressions pool water and become mirror-glossy puddles."
         )
         self.height_cavity_spin.valueChanged.connect(self.propertiesChanged.emit)
-        self.generate_page.add_param("Crevice / Cavity", self.height_cavity_spin)
+        self.height_cavity_spin.setToolTip("Makes recessed areas (cracks, gaps) more matte, as dirt and wear collect there.")
+        self.generate_page.add_param("Rougher in cracks", self.height_cavity_spin)
 
         self.albedo_contrast_spin = QDoubleSpinBox()
         self.albedo_contrast_spin.setRange(0.0, 1.0)
@@ -60,7 +62,8 @@ class RoughnessPanel(GeneratePropertiesContainer):
         self.albedo_contrast_spin.setValue(0.0)
         self.albedo_contrast_spin.setToolTip("Color and grain variation in photo raises local roughness variance.")
         self.albedo_contrast_spin.valueChanged.connect(self.propertiesChanged.emit)
-        self.generate_page.add_param("Albedo contrast", self.albedo_contrast_spin)
+        self.albedo_contrast_spin.setToolTip("Spots that vary in the photo's color become rougher.")
+        self.generate_page.add_param("Photo variation", self.albedo_contrast_spin)
 
         reset_gen_btn = QPushButton("Reset Generate Defaults")
         reset_gen_btn.clicked.connect(self.reset_generate_defaults)
@@ -84,7 +87,8 @@ class RoughnessPanel(GeneratePropertiesContainer):
         self.base_roughness_spin.setValue(0.3)
         self.base_roughness_spin.setToolTip("Roughness of a perfectly flat/coherent area.")
         self.base_roughness_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Base Roughness", self.base_roughness_spin)
+        self.base_roughness_spin.setToolTip("How matte a smooth, flat area is. 0 is mirror-like, 1 fully matte.")
+        page.add_param("Base roughness", self.base_roughness_spin)
 
         self.strength_spin = QDoubleSpinBox()
         self.strength_spin.setRange(0.0, 3.0)
@@ -92,7 +96,8 @@ class RoughnessPanel(GeneratePropertiesContainer):
         self.strength_spin.setValue(1.0)
         self.strength_spin.setToolTip("How strongly local Normal-map detail raises roughness.")
         self.strength_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Strength", self.strength_spin)
+        self.strength_spin.setToolTip("How much the small bumps make the surface more matte.")
+        page.add_param("Detail influence", self.strength_spin)
 
         self.window_spin = QDoubleSpinBox()
         self.window_spin.setRange(0.5, 10.0)
@@ -101,7 +106,8 @@ class RoughnessPanel(GeneratePropertiesContainer):
         self.window_spin.setSuffix(" %")
         self.window_spin.setToolTip("Footprint size (as % of the shorter image side) the local variance is measured over.")
         self.window_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Detail Window", self.window_spin)
+        self.window_spin.setToolTip("Size of the area looked at for each spot, in % of the image. Larger gives broader, calmer variation.")
+        page.add_param("Detail size", self.window_spin)
 
         self.invert_checkbox = QCheckBox("Invert")
         self.invert_checkbox.setToolTip("Flip the convention, for materials where this heuristic runs backwards.")
@@ -138,7 +144,7 @@ class RoughnessPanel(GeneratePropertiesContainer):
         self.imperfection_strength_spin.setValue(1.0)
         self.imperfection_strength_spin.setToolTip("Overall intensity / blend strength of your painted imperfection layer.")
         self.imperfection_strength_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Paint Strength", self.imperfection_strength_spin)
+        page.add_param("Paint strength", self.imperfection_strength_spin)
 
         reset_btn = QPushButton("Reset to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)

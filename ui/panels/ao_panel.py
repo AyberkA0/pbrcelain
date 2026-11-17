@@ -18,7 +18,7 @@ class AOPanel(GeneratePropertiesContainer):
         super().__init__(parent)
 
         self.note_label = QLabel(
-            "No Height map yet, so Generate Map has nothing to work from "
+            "No Height map yet, so the button below has nothing to work from "
             "(you can still import an Ambient Occlusion map directly instead)."
         )
         self.note_label.setWordWrap(True)
@@ -26,8 +26,8 @@ class AOPanel(GeneratePropertiesContainer):
         self.generate_page.add_wide(self.note_label)
 
         self.method_combo = QComboBox()
-        self.method_combo.addItem("Ray-traced (accurate)", AO_METHOD_RAYTRACED)
-        self.method_combo.addItem("Classic (fast approximation)", AO_METHOD_CLASSIC)
+        self.method_combo.addItem("Ray-traced", AO_METHOD_RAYTRACED)
+        self.method_combo.addItem("Classic", AO_METHOD_CLASSIC)
         self.method_combo.setToolTip(
             "Ray-traced: treats the Height map as a real 3D surface at the real-world\n"
             "scale below and traces the sky visibility of every pixel — physically\n"
@@ -36,7 +36,7 @@ class AOPanel(GeneratePropertiesContainer):
         )
         self.method_combo.currentIndexChanged.connect(self._on_method_changed)
         self.method_combo.currentIndexChanged.connect(self.propertiesChanged.emit)
-        self.generate_page.add_param("AO method", self.method_combo, wide=True)
+        self.generate_page.add_param("Method", self.method_combo, wide=True)
 
         self.generate_page.add_section("Real-World Scale")
 
@@ -70,24 +70,27 @@ class AOPanel(GeneratePropertiesContainer):
         self.generate_page.add_section("Horizon Ray Sampling")
 
         self.samples_combo = QComboBox()
-        self.samples_combo.addItems(["4 rays (Fast)", "8 rays (Balanced)", "12 rays (High)", "16 rays (Ultra)"])
+        self.samples_combo.addItems(["Fast", "Balanced", "High", "Ultra"])
         self.samples_combo.setCurrentIndex(1)
         self.samples_combo.currentIndexChanged.connect(self.propertiesChanged.emit)
-        self.generate_page.add_param("Sample rays", self.samples_combo)
+        self.samples_combo.setToolTip("Fast: 4 directions, Balanced: 8, High: 12, Ultra: 16. More directions give smoother shadows but take longer.")
+        self.generate_page.add_param("Quality", self.samples_combo)
 
         self.radius_spin = QSpinBox()
         self.radius_spin.setRange(2, 64)
         self.radius_spin.setValue(16)
         self.radius_spin.setToolTip("Classic method: search distance in pixels for neighboring occluding structures.")
         self.radius_spin.valueChanged.connect(self.propertiesChanged.emit)
-        self._radius_field = self.generate_page.add_param("Search radius (px)", self.radius_spin)
+        self.radius_spin.setToolTip("How far away a bump can still darken its surroundings, in pixels.")
+        self._radius_field = self.generate_page.add_param("Shadow reach (px)", self.radius_spin)
 
         self.blur_spin = QSpinBox()
         self.blur_spin.setRange(0, 10)
         self.blur_spin.setValue(1)
         self.blur_spin.setToolTip("Gentle post-softening to eliminate stepped sampling artifacts.")
         self.blur_spin.valueChanged.connect(self.propertiesChanged.emit)
-        self.generate_page.add_param("Pre-smooth (px)", self.blur_spin)
+        self.blur_spin.setToolTip("Blurs the result slightly to hide banding.")
+        self.generate_page.add_param("Softening (px)", self.blur_spin)
 
         reset_gen_btn = QPushButton("Reset Generate Defaults")
         reset_gen_btn.clicked.connect(self.reset_generate_defaults)
@@ -104,7 +107,8 @@ class AOPanel(GeneratePropertiesContainer):
         self.strength_spin.setValue(1.0)
         self.strength_spin.setToolTip("Multiplier for contact shadow darkness in crevices.")
         self.strength_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Strength", self.strength_spin)
+        self.strength_spin.setToolTip("How dark the shadows in cracks and corners get.")
+        page.add_param("Darkness", self.strength_spin)
 
         self.contrast_spin = QDoubleSpinBox()
         self.contrast_spin.setRange(0.2, 4.0)
@@ -112,10 +116,12 @@ class AOPanel(GeneratePropertiesContainer):
         self.contrast_spin.setValue(1.5)
         self.contrast_spin.setToolTip("Occlusion gamma power: >1.0 deepens cracks while keeping flat areas bright.")
         self.contrast_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Contrast curve", self.contrast_spin)
+        self.contrast_spin.setToolTip("Above 1 keeps flat areas bright while cracks get darker.")
+        page.add_param("Contrast", self.contrast_spin)
 
         self.invert_checkbox = QCheckBox("Invert")
         self.invert_checkbox.stateChanged.connect(self.propertiesChanged.emit)
+        self.invert_checkbox.setToolTip("Swap dark and light, for engines that expect white in the cracks.")
         page.add_param("Direction", self.invert_checkbox)
 
         reset_btn = QPushButton("Reset to Defaults")

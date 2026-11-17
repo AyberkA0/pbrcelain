@@ -94,6 +94,9 @@ def _scale_pixels(options, scale: float, *fields: str):
     return replace(options, **changes) if changes else options
 
 
+_AO_CACHE = None  # (key, height image, raw occlusion) of the last AO draft
+
+
 class PropertiesPreviewWorker(QThread):
     result_ready = pyqtSignal(int, str, object)
     failed = pyqtSignal(int, str)
@@ -157,6 +160,28 @@ class PropertiesPreviewWorker(QThread):
         self.normal_options = _scale_pixels(self.normal_options, scale, "pre_blur_radius")
         self.ao_options = _scale_pixels(self.ao_options, scale, "blur_radius")
 
+    def _ao_full_resolution(self) -> Image.Image:
+        """AO depends on pixel distances, so a low-resolution draft never looks
+        like the saved map. Compute it at full size instead; the slow occlusion
+        step is cached, so Adjustment edits (strength, contrast, ...) stay fast."""
+        from core.ao_map import finish_ao, occlusion_key, occlusion_map, to_image as ao_to_image
+
+        global _AO_CACHE
+        key = (id(self.height_image), occlusion_key(self.ao_options))
+        if _AO_CACHE is None or _AO_CACHE[0] != key:
+            img = self.height_image
+            if img.mode in ("I;16", "I"):
+                arr = np.asarray(img, dtype=np.float32) / 65535.0
+            elif img.mode == "F":
+                arr = np.asarray(img, dtype=np.float32).clip(0.0, 1.0)
+            else:
+                arr = np.asarray(img.convert("L"), dtype=np.float32) / 255.0
+            # Holding the image keeps its id() from being reused by another one.
+            _AO_CACHE = (key, img, occlusion_map(arr, self.ao_options))
+        result = ao_to_image(finish_ao(_AO_CACHE[2], self.ao_options), bit_depth=8)
+        result.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+        return result
+
     def run(self) -> None:
         try:
             images: dict[str, Image.Image] = {}
@@ -205,11 +230,7 @@ class PropertiesPreviewWorker(QThread):
             elif self.map_type == "ao":
                 if self.height_image is None:
                     return
-                from core.ao_map import generate_ao_map, to_image as ao_to_image
-                height_arr = self._height_array(self.height_image)
-                self._scale_downstream(height_arr.shape[1] / self.height_image.width)
-                ao_arr = generate_ao_map(height_arr, self.ao_options)
-                images["ao"] = ao_to_image(ao_arr, bit_depth=8)
+                images["ao"] = self._ao_full_resolution()
 
             if self.isInterruptionRequested():
                 return

@@ -18,7 +18,7 @@ class NormalPanel(GeneratePropertiesContainer):
         super().__init__(parent)
 
         self.note_label = QLabel(
-            "No Height map yet, so Generate Map has nothing to work from "
+            "No Height map yet, so the button below has nothing to work from "
             "(you can still import a Normal map directly instead)."
         )
         self.note_label.setWordWrap(True)
@@ -31,9 +31,10 @@ class NormalPanel(GeneratePropertiesContainer):
             "Unreal Engine / DirectX (-Y)",
         ])
         self.preset_combo.currentIndexChanged.connect(self._on_preset_changed)
-        self.generate_page.add_param("Engine preset", self.preset_combo, wide=True)
+        self.preset_combo.setToolTip("Game engines read the green channel differently (OpenGL vs DirectX). Pick the one you export to.")
+        self.generate_page.add_param("Target engine", self.preset_combo, wide=True)
 
-        self.multi_freq_cb = QCheckBox("Enable Multi-Frequency Mixer")
+        self.multi_freq_cb = QCheckBox("Set detail sizes separately")
         self.multi_freq_cb.setToolTip("Decompose surface relief into 3 independent frequency octaves.")
         self.multi_freq_cb.stateChanged.connect(self.propertiesChanged.emit)
         self.generate_page.add_section("Multi-Frequency Detail Mixer", toggle=self.multi_freq_cb)
@@ -44,7 +45,7 @@ class NormalPanel(GeneratePropertiesContainer):
         self.macro_spin.setValue(1.0)
         self.macro_spin.setToolTip("Large-scale structural silhouette relief.")
         self.macro_spin.valueChanged.connect(self.propertiesChanged.emit)
-        self.generate_page.add_param("Macro structure", self.macro_spin)
+        self.generate_page.add_param("Large shapes", self.macro_spin)
 
         self.medium_spin = QDoubleSpinBox()
         self.medium_spin.setRange(0.0, 3.0)
@@ -60,9 +61,9 @@ class NormalPanel(GeneratePropertiesContainer):
         self.micro_spin.setValue(1.0)
         self.micro_spin.setToolTip("High-frequency fine pores, sandpaper grain, and subtle irregularities.")
         self.micro_spin.valueChanged.connect(self.propertiesChanged.emit)
-        self.generate_page.add_param("Micro grain", self.micro_spin)
+        self.generate_page.add_param("Fine grain", self.micro_spin)
 
-        self.inject_albedo_cb = QCheckBox("Inject Photo Grain")
+        self.inject_albedo_cb = QCheckBox("Add grain from photo")
         self.inject_albedo_cb.setToolTip("Extract micro pore/fiber grain from Albedo photo and blend into normal map.")
         self.inject_albedo_cb.stateChanged.connect(self.propertiesChanged.emit)
         self.generate_page.add_section("Albedo Photo Grain Injection", toggle=self.inject_albedo_cb)
@@ -72,7 +73,8 @@ class NormalPanel(GeneratePropertiesContainer):
         self.albedo_strength_spin.setSingleStep(0.05)
         self.albedo_strength_spin.setValue(0.5)
         self.albedo_strength_spin.valueChanged.connect(self.propertiesChanged.emit)
-        self.generate_page.add_param("Grain strength", self.albedo_strength_spin)
+        self.albedo_strength_spin.setToolTip("How much fine texture from the photo is added to the bumps.")
+        self.generate_page.add_param("Photo grain amount", self.albedo_strength_spin)
 
         reset_gen_btn = QPushButton("Reset Generate Defaults")
         reset_gen_btn.clicked.connect(self.reset_generate_defaults)
@@ -86,12 +88,14 @@ class NormalPanel(GeneratePropertiesContainer):
         self.strength_spin.setSingleStep(0.1)
         self.strength_spin.setValue(1.0)
         self.strength_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Strength", self.strength_spin)
+        self.strength_spin.setToolTip("How strong the bumps look. Higher makes the surface look deeper.")
+        page.add_param("Bump strength", self.strength_spin)
 
         self.pre_blur_spin = QSpinBox()
         self.pre_blur_spin.setRange(0, 25)
         self.pre_blur_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Pre-smooth (px)", self.pre_blur_spin)
+        self.pre_blur_spin.setToolTip("Softens the Height map before the bumps are calculated, which removes noise and jagged edges.")
+        page.add_param("Smooth height first (px)", self.pre_blur_spin)
 
         reset_btn = QPushButton("Reset to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)
