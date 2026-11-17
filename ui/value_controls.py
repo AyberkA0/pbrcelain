@@ -248,6 +248,13 @@ class Knob(QWidget):
         self.setToolTip(f"{tip}\n\n{hint}" if tip else hint)
         self.setEnabled(spin.isEnabled())
 
+    def _set(self, value: float) -> None:
+        # QSpinBox only accepts ints; a float raises and would abort the app.
+        if _is_int(self._spin):
+            self._spin.setValue(int(round(value)))
+        else:
+            self._spin.setValue(float(value))
+
     def _fraction(self) -> float:
         lo, hi = self._spin.minimum(), self._spin.maximum()
         return 0.0 if hi <= lo else (float(self._spin.value()) - lo) / (hi - lo)
@@ -277,17 +284,17 @@ class Knob(QWidget):
             return
         delta = event.position() - self._drag_origin
         travel = (-delta.y()) + delta.x()
-        self._spin.setValue(self._drag_value + travel * self._per_pixel(event.modifiers()))
+        self._set(self._drag_value + travel * self._per_pixel(event.modifiers()))
 
     def mouseReleaseEvent(self, event) -> None:
         self._drag_origin = None
 
     def mouseDoubleClickEvent(self, event) -> None:
-        self._spin.setValue(self._default)
+        self._set(self._default)
 
     def wheelEvent(self, event) -> None:
         steps = event.angleDelta().y() / 120.0
-        self._spin.setValue(float(self._spin.value()) + steps * self._spin.singleStep())
+        self._set(float(self._spin.value()) + steps * self._spin.singleStep())
 
     def paintEvent(self, event) -> None:
         from PyQt6.QtCore import QRectF
