@@ -8,7 +8,6 @@ and follow its conventions exactly, so results match the previous output:
 - resizing uses OpenCV's pixel-centre mapping for INTER_LINEAR and INTER_AREA;
 - the elliptical structuring element is built with OpenCV's rounding.
 
-tests/test_imgops.py compares every function against OpenCV when it is installed.
 """
 
 from __future__ import annotations
