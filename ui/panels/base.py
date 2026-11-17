@@ -15,6 +15,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.theme import IS_MAC, PLATFORM_THEME, pick
+from ui.value_controls import attach_scrub, find_spin, slider_field, wants_slider
+from ui.widgets import FoldArrow
 
 COLUMNS = 3
 
@@ -31,9 +33,7 @@ class SectionHeader(QWidget):
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(6)
-        self._arrow = QLabel()
-        self._arrow.setProperty("role", "panel-title")
-        self._arrow.setFixedWidth(12)
+        self._arrow = FoldArrow(expanded)
         row.addWidget(self._arrow)
         if checkbox is not None:
             label = checkbox.text()
@@ -60,7 +60,7 @@ class SectionHeader(QWidget):
         self.toggled.emit(expanded)
 
     def _refresh(self) -> None:
-        self._arrow.setText("\u25be" if self._expanded else "\u25b8")
+        self._arrow.set_expanded(self._expanded)
 
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
@@ -106,14 +106,25 @@ class PropertyPanel(QWidget):
         outer.addWidget(scroll)
 
     def add_param(self, label_text: str, widget: QWidget, wide: bool = False) -> QWidget:
+        inline = self._cursor is self._root
         container = QWidget()
-        v = QVBoxLayout(container)
+        if inline:
+            v = QHBoxLayout(container)
+            v.setSpacing(10)
+        else:
+            v = QVBoxLayout(container)
+            v.setSpacing(3)
         v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(3)
         label = QLabel(label_text)
         label.setProperty("role", "dim")
         v.addWidget(label)
-        v.addWidget(widget)
+        spin = find_spin(widget)
+        field = widget
+        if spin is not None:
+            attach_scrub(label, spin)
+            if spin is widget and wants_slider(spin):
+                field = slider_field(spin, stacked=not inline)
+        v.addWidget(field, 1 if inline else 0)
         if PLATFORM_THEME != "legacy":
             combos = widget.findChildren(QComboBox)
             if isinstance(widget, QComboBox):
@@ -121,11 +132,11 @@ class PropertyPanel(QWidget):
             for combo in combos:
                 combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
                 combo.setMinimumContentsLength(4)
-        if wide:
+        if wide or inline:
             self.add_wide(container)
             return container
         cur = self._cursor
-        cur.grid.addWidget(container, cur.row, cur.col)
+        cur.grid.addWidget(container, cur.row, cur.col, Qt.AlignmentFlag.AlignTop)
         cur.col += 1
         if cur.col >= COLUMNS:
             cur.col = 0
@@ -157,6 +168,9 @@ class PropertyPanel(QWidget):
             QSettings().setValue(key, state)
 
         header.toggled.connect(on_toggled)
+        if toggle is not None:
+            body.setEnabled(toggle.isChecked())
+            toggle.toggled.connect(body.setEnabled)
 
     def end_section(self) -> None:
         self._cursor = self._root

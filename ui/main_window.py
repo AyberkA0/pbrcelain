@@ -58,6 +58,7 @@ from ui.progress_dialog import OperationProgressDialog
 from ui import mac_window, window_layout
 from ui.theme import IS_MAC, IS_WINDOWS, PLATFORM_THEME, legacy_style, pick, theme_changed
 from ui.tiled_preview_dialog import TiledPreviewDialog
+from ui.export_dialog import ExportDialog
 from ui.icons import status_dot, themed_icon
 from ui.widgets import IMAGE_EXTENSIONS, ImageLabel, SlotButton, ToggleHeading
 from ui.workers import (
@@ -322,6 +323,12 @@ class MainWindow(QMainWindow):
             title_space.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
             title_space.setFixedHeight(mac_window.TITLE_BAR_HEIGHT)
             mac_window.install_drag_area(title_space)
+            title_row = QHBoxLayout(title_space)
+            title_row.setContentsMargins(78, 0, 14, 1)
+            self.project_title_label = QLabel("")
+            self.project_title_label.setProperty("role", "window-title")
+            self.project_title_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            title_row.addWidget(self.project_title_label, 1)
             layout.addWidget(title_space)
 
         strip = QFrame()
@@ -1660,6 +1667,10 @@ class MainWindow(QMainWindow):
         if IS_MAC:
             self.setWindowTitle("[*]")
             self.setWindowModified(self.dirty)
+            label = getattr(self, "project_title_label", None)
+            if label is not None:
+                name = os.path.splitext(os.path.basename(self.project_path))[0] if self.project_path else "Untitled"
+                label.setText(f"{name} \u2014 Edited" if self.dirty else name)
             return
         name = os.path.basename(self.project_path) if self.project_path else "Untitled"
         star = "*" if self.dirty else ""
@@ -1846,6 +1857,11 @@ class MainWindow(QMainWindow):
     def _export_maps(self) -> None:
         self._bake_all_pending_properties()
 
+        export_dialog = ExportDialog(self)
+        if export_dialog.exec() != ExportDialog.DialogCode.Accepted:
+            return
+        export_options = export_dialog.options()
+
         out_dir = QFileDialog.getExistingDirectory(self, "Select Export Folder")
         if not out_dir:
             return
@@ -1854,12 +1870,16 @@ class MainWindow(QMainWindow):
         for mt in MAP_TYPE_ORDER:
             img = self.generated_images.get(mt) or self.source_images.get(mt)
             if img is not None:
+                if mt == MapType.HEIGHT:
+                    img = height_map_to_image(_image_to_height_array(img), bit_depth=export_options.height_bit_depth)
+                elif mt == MapType.AO:
+                    img = ao_map_to_image(_image_to_height_array(img), bit_depth=export_options.ao_bit_depth)
                 ext = ".exr" if getattr(img, "mode", None) == "F" else ".png"
                 fname = f"{mt.value}{ext}"
                 items.append((MAP_TYPE_LABELS[mt], img, fname))
 
         height_img = self.generated_images.get(MapType.HEIGHT) or self.source_images.get(MapType.HEIGHT)
-        if height_img is not None and self.ao_panel.export_curvature():
+        if height_img is not None and export_options.curvature:
             curvature = generate_curvature_map(_image_to_height_array(height_img))
             items.append(("Curvature", curvature_map_to_image(curvature), "curvature.png"))
 

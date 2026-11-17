@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QEvent, Qt, pyqtSignal
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
-from PyQt6.QtWidgets import QLabel, QPushButton
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPainter, QPainterPath, QPalette, QPixmap
+from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 
 from ui.theme import PLATFORM_THEME
 
@@ -115,9 +115,58 @@ class ToggleHeading(QLabel):
         self.toggled.emit(expanded)
 
     def _refresh(self) -> None:
-        self.setText(("\u25be  " if self._expanded else "\u25b8  ") + self._title)
+        self.setText(self._title)
+        self.setIndent(_ARROW_BOX + 7)
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        painter = QPainter(self)
+        color = self.palette().color(QPalette.ColorRole.WindowText)
+        rect = self.contentsRect()
+        paint_fold_arrow(painter, rect.left(), rect.top(), _ARROW_BOX, rect.height(), self._expanded, color)
+        painter.end()
 
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
             self.set_expanded(not self._expanded)
         super().mouseReleaseEvent(event)
+
+
+_ARROW_BOX = 14
+
+
+def paint_fold_arrow(painter: QPainter, x: float, y: float, w: float, h: float, expanded: bool, color) -> None:
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    cx, cy = x + w / 2, y + h / 2
+    r = 4.5
+    path = QPainterPath()
+    if expanded:
+        path.moveTo(cx - r, cy - r * 0.55)
+        path.lineTo(cx + r, cy - r * 0.55)
+        path.lineTo(cx, cy + r * 0.75)
+    else:
+        path.moveTo(cx - r * 0.55, cy - r)
+        path.lineTo(cx - r * 0.55, cy + r)
+        path.lineTo(cx + r * 0.75, cy)
+    path.closeSubpath()
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(color)
+    painter.drawPath(path)
+
+
+class FoldArrow(QWidget):
+    def __init__(self, expanded: bool = True, parent=None):
+        super().__init__(parent)
+        self._expanded = expanded
+        self.setFixedSize(_ARROW_BOX + 2, _ARROW_BOX + 2)
+
+    def set_expanded(self, expanded: bool) -> None:
+        self._expanded = expanded
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        color = self.palette().color(QPalette.ColorRole.WindowText)
+        paint_fold_arrow(painter, 0, 0, self.width(), self.height(), self._expanded, color)
+        painter.end()

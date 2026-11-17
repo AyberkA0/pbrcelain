@@ -80,7 +80,7 @@ class AOPanel(GeneratePropertiesContainer):
         self.radius_spin.setValue(16)
         self.radius_spin.setToolTip("Classic method: search distance in pixels for neighboring occluding structures.")
         self.radius_spin.valueChanged.connect(self.propertiesChanged.emit)
-        self.generate_page.add_param("Search radius (px)", self.radius_spin)
+        self._radius_field = self.generate_page.add_param("Search radius (px)", self.radius_spin)
 
         self.blur_spin = QSpinBox()
         self.blur_spin.setRange(0, 10)
@@ -118,22 +118,6 @@ class AOPanel(GeneratePropertiesContainer):
         self.invert_checkbox.stateChanged.connect(self.propertiesChanged.emit)
         page.add_param("Invert", self.invert_checkbox)
 
-        page.add_section("Format")
-
-        self.export_curvature_checkbox = QCheckBox("Also export Curvature map")
-        self.export_curvature_checkbox.setToolTip(
-            "Export Maps also writes curvature.png, derived from the Height map:\n"
-            "mid-grey = flat, brighter = edges/ridges (wear), darker = cavities (dirt).\n"
-            "The usual input for edge-wear and dirt masks in Substance, Unreal and Unity."
-        )
-        self.export_curvature_checkbox.stateChanged.connect(self.propertiesChanged.emit)
-        page.add_wide(self.export_curvature_checkbox)
-
-        self.bit_depth_combo = QComboBox()
-        self.bit_depth_combo.addItems(["8-bit", "16-bit"])
-        self.bit_depth_combo.currentTextChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Export bit depth", self.bit_depth_combo)
-
         reset_btn = QPushButton("Reset to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)
         page.end_section()
@@ -154,6 +138,15 @@ class AOPanel(GeneratePropertiesContainer):
         for w in (self.surface_width_spin, self.max_depth_spin, self.search_percent_spin):
             w.setEnabled(raytraced)
         self.radius_spin.setEnabled(not raytraced)
+        sections = self.generate_page.sections
+        if "Real-World Scale" in sections:
+            for widget in sections["Real-World Scale"]:
+                if widget is sections["Real-World Scale"][0] or not raytraced:
+                    widget.setVisible(raytraced)
+                elif sections["Real-World Scale"][0].is_expanded():
+                    widget.setVisible(True)
+        if hasattr(self, "_radius_field"):
+            self._radius_field.setVisible(not raytraced)
 
     def current_method(self) -> str:
         return self.method_combo.currentData() or AO_METHOD_RAYTRACED
@@ -178,13 +171,11 @@ class AOPanel(GeneratePropertiesContainer):
         self.strength_spin.setValue(1.0)
         self.contrast_spin.setValue(1.5)
         self.invert_checkbox.setChecked(False)
-        self.bit_depth_combo.setCurrentText("8-bit")
-        self.export_curvature_checkbox.setChecked(True)
         self.reset_generate_defaults()
         self.propertiesChanged.emit()
 
     def current_options(self) -> AOMapOptions:
-        bit_depth = 16 if self.bit_depth_combo.currentText() == "16-bit" else 8
+        bit_depth = 16
         return AOMapOptions(
             strength=self.strength_spin.value(),
             radius=self.radius_spin.value(),
@@ -199,9 +190,6 @@ class AOPanel(GeneratePropertiesContainer):
             search_percent=self.search_percent_spin.value(),
         )
 
-    def export_curvature(self) -> bool:
-        return self.export_curvature_checkbox.isChecked()
-
     def properties_to_dict(self) -> dict:
         return {
             "strength": self.strength_spin.value(),
@@ -210,12 +198,10 @@ class AOPanel(GeneratePropertiesContainer):
             "contrast": self.contrast_spin.value(),
             "blur_radius": self.blur_spin.value(),
             "invert": self.invert_checkbox.isChecked(),
-            "bit_depth": self.bit_depth_combo.currentText(),
             "method": self.current_method(),
             "surface_width_cm": self.surface_width_spin.value(),
             "max_depth_mm": self.max_depth_spin.value(),
             "search_percent": self.search_percent_spin.value(),
-            "export_curvature": self.export_curvature_checkbox.isChecked(),
         }
 
     def properties_apply_dict(self, data: dict) -> None:
@@ -227,13 +213,11 @@ class AOPanel(GeneratePropertiesContainer):
         self.contrast_spin.setValue(data.get("contrast", 1.5))
         self.blur_spin.setValue(data.get("blur_radius", 1))
         self.invert_checkbox.setChecked(data.get("invert", False))
-        self.bit_depth_combo.setCurrentText(data.get("bit_depth", "8-bit"))
         defaults = AOMapOptions()
         self._set_method(data.get("method", AO_METHOD_CLASSIC))
         self.surface_width_spin.setValue(data.get("surface_width_cm", defaults.surface_width_cm))
         self.max_depth_spin.setValue(data.get("max_depth_mm", defaults.max_depth_mm))
         self.search_percent_spin.setValue(data.get("search_percent", defaults.search_percent))
-        self.export_curvature_checkbox.setChecked(data.get("export_curvature", False))
 
     to_options_dict = properties_to_dict
     apply_options_dict = properties_apply_dict

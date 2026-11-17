@@ -21,6 +21,7 @@ DARK = {
     "title_line": "rgba(255, 255, 255, 0.10)",
     "text": "#e5e5e7",
     "strong": "#ffffff",
+    "group_title": "#c7c7cc",
     "secondary": "#98989d",
     "tertiary": "#6e6e73",
     "control": "#3a3a3c",
@@ -63,6 +64,7 @@ LIGHT = {
     "title_line": "rgba(0, 0, 0, 0.12)",
     "text": "#1d1d1f",
     "strong": "#000000",
+    "group_title": "#3a3a3c",
     "secondary": "#6e6e73",
     "tertiary": "#a1a1a6",
     "control": "#ffffff",
@@ -196,6 +198,11 @@ QLabel[role="panel-title"], QLabel[role="slot-title"], QLabel[role="dialog-title
     font-size: 13px;
 }}
 
+QLabel[role="panel-title"] {{
+    color: {t["group_title"]};
+    font-weight: 400;
+}}
+
 QLabel[role="dialog-status"] {{
     color: {t["secondary"]};
 }}
@@ -225,6 +232,14 @@ QLabel[role="panel-heading"], QLabel[role="viewport-label"] {{
     padding: 10px 14px 4px 14px;
     font-size: 11px;
     font-weight: 700;
+}}
+
+QLabel[role="window-title"] {{
+    color: {t["secondary"]};
+    background-color: transparent;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
 }}
 
 QLabel[role="viewport-label"] {{

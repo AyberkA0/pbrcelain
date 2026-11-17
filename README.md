@@ -105,7 +105,7 @@ fixes this and shapes the relief — all non-destructively, on the raw depth dat
   - *Albedo guidance* uses edges in the source photo to keep joints at the bottom.
 - **Fine tuning** — invert, gamma, smoothing, percentile clipping (low/high),
   post-process seamless wrap.
-- **Output** — 8-bit PNG, 16-bit PNG or 32-bit float OpenEXR.
+- **Output** — 8-bit PNG, 16-bit PNG or 32-bit float OpenEXR, chosen when exporting.
 
 Edits preview instantly on a downscaled copy; **Save** commits them at full
 resolution, **Revert** discards them. The raw depth field is stored in the
@@ -127,9 +127,9 @@ without re-running the model.
   pixel's sky visibility is traced in 4–16 directions, so crevices darken by
   their actual depth and width and the result looks the same at any resolution.
   The original fast approximation remains available as the *Classic* method
-  (projects saved before keep using it). Strength, contrast, 8/16-bit output.
-- **Curvature** — exported alongside the other maps (optional, in the AO
-  panel): mid-grey is flat, brighter marks edges and ridges, darker marks
+  (projects saved before keep using it). Strength, contrast; 8- or 16-bit output, chosen when exporting.
+- **Curvature** — exported alongside the other maps (optional, in the Export
+  Maps dialog): mid-grey is flat, brighter marks edges and ridges, darker marks
   cavities; the usual mask for edge wear and dirt in material graphs.
 - **Albedo** — used as imported, with optional auto white balance, color-range
   shifting and seamless edge blending.
@@ -236,5 +236,6 @@ layout (e.g. a renamed `.pcln`) opens as a project too.
 
 Commands (the File menu on macOS, the command bar on Windows): **New Project /
 Open Project / Open Recent / Save / Save As / Export Maps**.
-**Export Maps** writes every available map to a folder (PNG, or EXR for 32-bit
-height maps), plus `curvature.png` when a Height map exists.
+**Export Maps** asks for the Height and AO bit depth and whether to include a
+curvature map, then writes every available map to a folder (PNG, or EXR for
+32-bit height maps).

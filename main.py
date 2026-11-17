@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import QApplication
 from core.project import is_project_path
 from ui.preview_3d import configure_surface_format
 from ui.theme import apply_app_theme
+from ui.value_controls import install_wheel_guard
 
 
 def _project_path_from_args(argv: list[str]) -> str | None:
@@ -93,6 +94,7 @@ def main() -> int:
     app.setApplicationName("PBRCELAIN")
     app.setOrganizationName("PBRCELAIN")
     apply_app_theme(app)
+    install_wheel_guard(app)
 
     _set_app_icon(app)
 

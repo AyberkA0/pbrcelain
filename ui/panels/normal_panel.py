@@ -88,12 +88,6 @@ class NormalPanel(GeneratePropertiesContainer):
         self.strength_spin.valueChanged.connect(self.propertiesChanged.emit)
         page.add_param("Strength", self.strength_spin)
 
-        self.invert_y_checkbox = QCheckBox("Invert Green (Y)")
-        self.invert_y_checkbox.setToolTip("Flip the green channel: OpenGL vs DirectX normal-map convention.")
-        self.invert_y_checkbox.stateChanged.connect(self._on_invert_y_toggled)
-        self.invert_y_checkbox.stateChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Convention", self.invert_y_checkbox)
-
         self.pre_blur_spin = QSpinBox()
         self.pre_blur_spin.setRange(0, 25)
         self.pre_blur_spin.valueChanged.connect(self.propertiesChanged.emit)
@@ -105,15 +99,10 @@ class NormalPanel(GeneratePropertiesContainer):
         page.add_stretch()
 
     def _on_preset_changed(self, idx: int) -> None:
-        self.invert_y_checkbox.blockSignals(True)
-        self.invert_y_checkbox.setChecked(idx == 1)
-        self.invert_y_checkbox.blockSignals(False)
         self.propertiesChanged.emit()
 
-    def _on_invert_y_toggled(self, checked: bool) -> None:
-        self.preset_combo.blockSignals(True)
-        self.preset_combo.setCurrentIndex(1 if checked else 0)
-        self.preset_combo.blockSignals(False)
+    def _invert_y(self) -> bool:
+        return self.preset_combo.currentIndex() == 1
 
     def reset_generate_defaults(self) -> None:
         self.multi_freq_cb.setChecked(False)
@@ -126,7 +115,6 @@ class NormalPanel(GeneratePropertiesContainer):
 
     def reset_to_defaults(self) -> None:
         self.strength_spin.setValue(1.0)
-        self.invert_y_checkbox.setChecked(False)
         self.pre_blur_spin.setValue(0)
         self.reset_generate_defaults()
         self.propertiesChanged.emit()
@@ -137,7 +125,7 @@ class NormalPanel(GeneratePropertiesContainer):
     def current_options(self) -> NormalMapOptions:
         return NormalMapOptions(
             strength=self.strength_spin.value(),
-            invert_y=self.invert_y_checkbox.isChecked(),
+            invert_y=self._invert_y(),
             pre_blur_radius=self.pre_blur_spin.value(),
             multi_frequency=self.multi_freq_cb.isChecked(),
             macro_strength=self.macro_spin.value(),
@@ -150,7 +138,7 @@ class NormalPanel(GeneratePropertiesContainer):
     def properties_to_dict(self) -> dict:
         return {
             "strength": self.strength_spin.value(),
-            "invert_y": self.invert_y_checkbox.isChecked(),
+            "invert_y": self._invert_y(),
             "pre_blur_radius": self.pre_blur_spin.value(),
             "multi_frequency": self.multi_freq_cb.isChecked(),
             "macro_strength": self.macro_spin.value(),
@@ -164,7 +152,9 @@ class NormalPanel(GeneratePropertiesContainer):
         if not data:
             return
         self.strength_spin.setValue(data.get("strength", self.strength_spin.value()))
-        self.invert_y_checkbox.setChecked(data.get("invert_y", False))
+        self.preset_combo.blockSignals(True)
+        self.preset_combo.setCurrentIndex(1 if data.get("invert_y", False) else 0)
+        self.preset_combo.blockSignals(False)
         self.pre_blur_spin.setValue(data.get("pre_blur_radius", self.pre_blur_spin.value()))
 
         self.multi_freq_cb.setChecked(data.get("multi_frequency", False))

@@ -99,11 +99,6 @@ class AlbedoPanel(GeneratePropertiesContainer):
 
         self.properties_page.end_section()
 
-        self.bit_depth_combo = QComboBox()
-        self.bit_depth_combo.addItems(["8-bit", "16-bit"])
-        self.bit_depth_combo.currentTextChanged.connect(self.propertiesChanged.emit)
-        self.properties_page.add_param("Export bit depth", self.bit_depth_combo)
-
         reset_btn = QPushButton("Reset to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)
         self.properties_page.add_wide(reset_btn)
@@ -169,12 +164,10 @@ class AlbedoPanel(GeneratePropertiesContainer):
         self.falloff_spin.setValue(1.0)
         self.seamless_cb.setChecked(False)
         self.seamless_overlap_spin.setValue(10.0)
-        self.bit_depth_combo.setCurrentText("8-bit")
         self.propertiesChanged.emit()
 
     def properties_to_dict(self) -> dict:
         return {
-            "bit_depth": self.bit_depth_combo.currentText(),
             "shift_enabled": self.shift_enabled_cb.isChecked(),
             "source_rgb": [self.source_color.red(), self.source_color.green(), self.source_color.blue()],
             "target_rgb": [self.target_color.red(), self.target_color.green(), self.target_color.blue()],
@@ -189,7 +182,6 @@ class AlbedoPanel(GeneratePropertiesContainer):
     def properties_apply_dict(self, data: dict) -> None:
         if not data:
             return
-        self.bit_depth_combo.setCurrentText(data.get("bit_depth", self.bit_depth_combo.currentText()))
         self.shift_enabled_cb.setChecked(data.get("shift_enabled", False))
         if "source_rgb" in data:
             r, g, b = data["source_rgb"]

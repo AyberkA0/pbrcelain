@@ -103,10 +103,6 @@ class HeightPanel(GeneratePropertiesContainer):
         self.device_combo.currentTextChanged.connect(self.modelSettingsChanged.emit)
         page.add_param("Device", self.device_combo)
 
-        self.model_status_label = QLabel("No model loaded yet — it loads when you generate.")
-        self.model_status_label.setWordWrap(True)
-
-        page.add_wide(self.model_status_label)
 
         self._on_family_changed(self.family_combo.currentText())
 
@@ -140,7 +136,7 @@ class HeightPanel(GeneratePropertiesContainer):
         return self.family_combo.currentText(), self.variant_combo.currentText()
 
     def set_model_status(self, text: str) -> None:
-        self.model_status_label.setText(text)
+        pass
 
     def set_model_controls_enabled(self, enabled: bool) -> None:
         for w in (self.family_combo, self.variant_combo, self.device_combo):
@@ -298,11 +294,11 @@ class HeightPanel(GeneratePropertiesContainer):
         self.detrend_radius_spin.setValue(8.0)
         self.detrend_radius_spin.setSuffix(" %")
         self.detrend_radius_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Flatten radius", self.detrend_radius_spin)
+        self._detrend_radius_field = page.add_param("Flatten radius", self.detrend_radius_spin)
 
         self.edit_curve_btn = QPushButton("Edit Curve…")
         self.edit_curve_btn.clicked.connect(self._open_curve_editor)
-        page.add_param("Bowl correction", self.edit_curve_btn)
+        self._edit_curve_field = page.add_param("Bowl correction", self.edit_curve_btn)
 
         self.invert_checkbox = QCheckBox("Invert (near ↔ far)")
         self.invert_checkbox.stateChanged.connect(self.propertiesChanged.emit)
@@ -374,12 +370,6 @@ class HeightPanel(GeneratePropertiesContainer):
         self.high_pct_spin.valueChanged.connect(self.propertiesChanged.emit)
         page.add_param("Clip high %", self.high_pct_spin)
 
-        self.bit_depth_combo = QComboBox()
-        self.bit_depth_combo.addItems(["8-bit (PNG)", "16-bit (PNG)", "32-bit (OpenEXR .exr)"])
-        self.bit_depth_combo.setCurrentText("16-bit (PNG)")
-        self.bit_depth_combo.currentTextChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Export bit depth", self.bit_depth_combo)
-
         reset_btn = QPushButton("Reset to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)
         page.end_section()
@@ -431,13 +421,16 @@ class HeightPanel(GeneratePropertiesContainer):
         self.blur_spin.setValue(0)
         self.low_pct_spin.setValue(1.0)
         self.high_pct_spin.setValue(99.0)
-        self.bit_depth_combo.setCurrentText("16-bit (PNG)")
         self.propertiesChanged.emit()
 
     def _on_detrend_mode_changed(self, text: str) -> None:
         mode = DETREND_MAP.get(text)
         self.detrend_radius_spin.setEnabled(mode == DETREND_HIGHPASS)
         self.edit_curve_btn.setEnabled(mode == DETREND_QUADRATIC)
+        if hasattr(self, "_detrend_radius_field"):
+            self._detrend_radius_field.setVisible(mode == DETREND_HIGHPASS)
+        if hasattr(self, "_edit_curve_field"):
+            self._edit_curve_field.setVisible(mode == DETREND_QUADRATIC)
 
     def _open_curve_editor(self) -> None:
         raw_depth = None
@@ -474,8 +467,7 @@ class HeightPanel(GeneratePropertiesContainer):
             self.propertiesChanged.emit()
 
     def current_options(self) -> HeightMapOptions:
-        txt = self.bit_depth_combo.currentText()
-        bit_depth = 32 if "32" in txt else (16 if "16" in txt else 8)
+        bit_depth = 16
         return HeightMapOptions(
             invert=self.invert_checkbox.isChecked(),
             low_percentile=self.low_pct_spin.value(),
@@ -561,7 +553,6 @@ class HeightPanel(GeneratePropertiesContainer):
             "blur": self.blur_spin.value(),
             "low_pct": self.low_pct_spin.value(),
             "high_pct": self.high_pct_spin.value(),
-            "bit_depth": self.bit_depth_combo.currentText(),
         }
 
     def properties_apply_dict(self, data: dict) -> None:
@@ -582,7 +573,6 @@ class HeightPanel(GeneratePropertiesContainer):
         self.low_pct_spin.setValue(data.get("low_pct", self.low_pct_spin.value()))
         self.high_pct_spin.setValue(data.get("high_pct", self.high_pct_spin.value()))
 
-        self.bit_depth_combo.setCurrentText(data.get("bit_depth", self.bit_depth_combo.currentText()))
 
     def to_options_dict(self) -> dict:
         return {**self.generate_to_dict(), **self.properties_to_dict()}

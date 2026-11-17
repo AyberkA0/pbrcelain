@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QFrame,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QPushButton,
     QScrollArea,
@@ -21,6 +22,27 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.theme import IS_MAC
+from ui.value_controls import attach_scrub, find_spin, slider_field
+
+
+def _enhance_form(group: QWidget) -> QWidget:
+    form = group.layout()
+    if not isinstance(form, QFormLayout):
+        return group
+    for row in range(form.rowCount()):
+        label_item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+        field_item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+        if label_item is None or field_item is None or field_item.widget() is None:
+            continue
+        label, field = label_item.widget(), field_item.widget()
+        spin = find_spin(field)
+        if spin is None or not isinstance(label, QLabel):
+            continue
+        attach_scrub(label, spin)
+        if spin is field and not label.text().startswith("Pivot"):
+            form.removeWidget(spin)
+            form.setWidget(row, QFormLayout.ItemRole.FieldRole, slider_field(spin, stacked=False))
+    return group
 
 MESH_LABELS = {"sphere": "Sphere", "cube": "Cube", "plane": "Plane"}
 MESH_VALUES = {v: k for k, v in MESH_LABELS.items()}
@@ -81,7 +103,7 @@ class PreviewPropertiesPanel(QWidget):
             page = QWidget()
             page_layout = QVBoxLayout(page)
             page_layout.setContentsMargins(8, 4, 8, 8)
-            page_layout.addWidget(build())
+            page_layout.addWidget(_enhance_form(build()))
             page_layout.addStretch(1)
             scroll.setWidget(page)
             self._stack.addWidget(scroll)
