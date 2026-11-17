@@ -54,7 +54,7 @@ class OperationProgressDialog(QDialog):
                 color: transparent;
             }
             QProgressBar::chunk {
-                background-color: #1473e6;
+                background-color: #4a72d9;
                 border-radius: 1px;
             }
             QPushButton {

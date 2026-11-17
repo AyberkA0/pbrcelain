@@ -8,16 +8,19 @@ COLOR_PANEL_INSPECTOR = "#2a2a2a"
 COLOR_INPUT_BG = "#1a1a1a"
 COLOR_BORDER = "#202020"
 COLOR_BORDER_LIGHT = "#3c3c3c"
-COLOR_BORDER_FOCUS = "#1473e6"
+COLOR_BORDER_FOCUS = "#4a72d9"
 COLOR_TEXT = "#dedede"
 COLOR_TEXT_DIM = "#8a8a8a"
 COLOR_TEXT_BRIGHT = "#ffffff"
 COLOR_BTN_BG = "#3e3e3e"
 COLOR_BTN_HOVER = "#4c4c4c"
 COLOR_BTN_PRESSED = "#282828"
-COLOR_ACCENT = "#1473e6"
-COLOR_ACCENT_HOVER = "#2688f2"
-COLOR_ACCENT_PRESSED = "#0d66d0"
+# Cobalt, the blue of glazed porcelain. Fixed, so the app looks the same
+# whatever accent color the system is set to.
+ACCENT = "#4a72d9"
+COLOR_ACCENT = ACCENT
+COLOR_ACCENT_HOVER = "#5d82e0"
+COLOR_ACCENT_PRESSED = "#3a60c2"
 COLOR_DISABLED = "#555555"
 COLOR_DISABLED_BG = "#2c2c2c"
 
@@ -195,7 +198,7 @@ QPushButton[role="generate"] {{
     background-color: {COLOR_ACCENT};
     color: {COLOR_TEXT_BRIGHT};
     font-weight: 600;
-    border: 1px solid #0d66d0;
+    border: 1px solid #3a60c2;
     padding: 7px 12px;
     border-radius: 3px;
     font-size: 11px;
@@ -540,7 +543,19 @@ _signals = _ThemeSignals()
 theme_changed = _signals.changed
 
 
+def _apply_accent_palette(app) -> None:
+    """Custom-drawn controls (sliders, knobs) read the accent from the palette."""
+    from PyQt6.QtGui import QColor, QPalette
+
+    palette = app.palette()
+    for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
+        palette.setColor(group, QPalette.ColorRole.Accent, QColor(ACCENT))
+        palette.setColor(group, QPalette.ColorRole.Highlight, QColor(ACCENT))
+    app.setPalette(palette)
+
+
 def apply_app_theme(app) -> None:
+    _apply_accent_palette(app)
     if PLATFORM_THEME == "mac":
         from ui import mac_theme
 

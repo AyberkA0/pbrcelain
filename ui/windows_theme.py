@@ -7,7 +7,7 @@ from PyQt6.QtGui import QColor, QFont, QFontDatabase, QGuiApplication, QIcon, QP
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from ui import combo_popup, win_window
-from ui.theme import theme_changed
+from ui.theme import ACCENT, theme_changed
 
 _ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "windows").replace("\\", "/")
 
@@ -92,10 +92,7 @@ def tokens() -> dict:
 
 
 def _system_accent() -> QColor:
-    color = QGuiApplication.palette().color(QPalette.ColorRole.Accent)
-    if not color.isValid() or color.alpha() == 0:
-        color = QColor("#0078d4")
-    return color
+    return QColor(ACCENT)
 
 
 def accent_colors(dark: bool) -> dict:

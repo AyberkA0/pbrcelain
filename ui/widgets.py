@@ -218,7 +218,7 @@ class _Halo(QWidget):
         from PyQt6.QtGui import QColor
 
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self.color = QColor("#0a84ff")
+        self.color = QColor("#4a72d9")
         self.strength = 0.0
         self.radius = 9.0
 

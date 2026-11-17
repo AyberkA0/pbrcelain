@@ -473,10 +473,10 @@ class ImperfectionPainterDialog(QDialog):
         self.btn_rough.setChecked(True)
         legacy_style(self.btn_rough, """
             QPushButton:checked {
-                background-color: #1473e6;
+                background-color: #4a72d9;
                 color: #ffffff;
                 font-weight: bold;
-                border: 1px solid #0d66d0;
+                border: 1px solid #3a60c2;
                 border-radius: 3px;
                 padding: 6px;
                 text-align: left;
@@ -497,10 +497,10 @@ class ImperfectionPainterDialog(QDialog):
         self.btn_gloss.setCheckable(True)
         legacy_style(self.btn_gloss, """
             QPushButton:checked {
-                background-color: #1473e6;
+                background-color: #4a72d9;
                 color: #ffffff;
                 font-weight: bold;
-                border: 1px solid #0d66d0;
+                border: 1px solid #3a60c2;
                 border-radius: 3px;
                 padding: 6px;
                 text-align: left;
@@ -521,10 +521,10 @@ class ImperfectionPainterDialog(QDialog):
         self.btn_eraser.setCheckable(True)
         legacy_style(self.btn_eraser, """
             QPushButton:checked {
-                background-color: #1473e6;
+                background-color: #4a72d9;
                 color: #ffffff;
                 font-weight: bold;
-                border: 1px solid #0d66d0;
+                border: 1px solid #3a60c2;
                 border-radius: 3px;
                 padding: 6px;
                 text-align: left;

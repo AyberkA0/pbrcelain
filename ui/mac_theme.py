@@ -7,7 +7,7 @@ from PyQt6.QtGui import QColor, QFontDatabase, QGuiApplication, QPalette
 from PyQt6.QtWidgets import QApplication
 
 from ui import combo_popup
-from ui.theme import theme_changed
+from ui.theme import ACCENT, theme_changed
 
 _ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "mac").replace("\\", "/")
 
@@ -112,10 +112,7 @@ def tokens() -> dict:
 
 
 def accent_color() -> QColor:
-    color = QGuiApplication.palette().color(QPalette.ColorRole.Accent)
-    if not color.isValid() or color.alpha() == 0:
-        color = QColor("#0a84ff")
-    return color
+    return QColor(ACCENT)
 
 
 def _rgba(color: QColor, alpha: float) -> str:

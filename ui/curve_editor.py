@@ -460,10 +460,10 @@ class CurveEditorDialog(QDialog):
         self.btn_x.setChecked(True)
         legacy_style(self.btn_x, """
             QPushButton:checked {
-                background-color: #1473e6;
+                background-color: #4a72d9;
                 color: #ffffff;
                 font-weight: bold;
-                border: 1px solid #0d66d0;
+                border: 1px solid #3a60c2;
                 border-radius: 3px;
                 padding: 5px 12px;
             }
@@ -483,10 +483,10 @@ class CurveEditorDialog(QDialog):
         self.btn_y.setChecked(False)
         legacy_style(self.btn_y, """
             QPushButton:checked {
-                background-color: #1473e6;
+                background-color: #4a72d9;
                 color: #ffffff;
                 font-weight: bold;
-                border: 1px solid #0d66d0;
+                border: 1px solid #3a60c2;
                 border-radius: 3px;
                 padding: 5px 12px;
             }
@@ -553,10 +553,10 @@ class CurveEditorDialog(QDialog):
         self.compare_btn.setToolTip("Toggle to compare between raw uncorrected depth and current curve correction.")
         legacy_style(self.compare_btn, """
             QPushButton:checked {
-                background-color: #1473e6;
+                background-color: #4a72d9;
                 color: #ffffff;
                 font-weight: bold;
-                border: 1px solid #0d66d0;
+                border: 1px solid #3a60c2;
                 border-radius: 3px;
                 padding: 4px 10px;
                 font-size: 11px;

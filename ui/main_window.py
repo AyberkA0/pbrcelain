@@ -761,7 +761,9 @@ class MainWindow(QMainWindow):
             from ui import mac_theme
 
             return mac_theme.accent_color()
-        return self.palette().color(self.palette().ColorRole.Highlight) or QColor("#0a84ff")
+        from ui.theme import ACCENT
+
+        return QColor(ACCENT)
 
     def _refresh_material_header(self) -> None:
         if not hasattr(self, "material_name_label"):
@@ -821,7 +823,7 @@ class MainWindow(QMainWindow):
             elif map_type in self.generated_images:
                 state, color, filled = "Generated", "#30a46c", True
             elif map_type in self.source_images:
-                state, color, filled = "Loaded", "#3b82f6", True
+                state, color, filled = "Loaded", "#4a72d9", True
             else:
                 state, color, filled = "Empty", "#8e8e93", False
             btn.setIcon(slot_icon(f"map-{map_type.value}", color, filled))
