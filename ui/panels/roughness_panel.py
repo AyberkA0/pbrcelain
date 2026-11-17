@@ -33,7 +33,7 @@ class RoughnessPanel(GeneratePropertiesContainer):
             "(you can still import a Roughness map directly instead)."
         )
         self.note_label.setWordWrap(True)
-        self.note_label.setProperty("role", "dim")
+        self.note_label.setStyleSheet("color: #e5a50a;")  # warning yellow, readable in light and dark
         self.generate_page.add_wide(self.note_label)
 
         self.preset_combo = QComboBox()
@@ -42,7 +42,7 @@ class RoughnessPanel(GeneratePropertiesContainer):
         self.preset_combo.setToolTip("Sets sensible starting values for this kind of surface.")
         self.generate_page.add_param("Material", self.preset_combo, wide=True)
 
-        self.generate_page.add_section("Hybrid Source Blending")
+        self.generate_page.add_section("Extra Influences")
         self.height_cavity_spin = QDoubleSpinBox()
         self.height_cavity_spin.setRange(-1.0, 1.0)
         self.height_cavity_spin.setSingleStep(0.05)
@@ -114,7 +114,7 @@ class RoughnessPanel(GeneratePropertiesContainer):
         self.invert_checkbox.stateChanged.connect(self.propertiesChanged.emit)
         page.add_param("Convention", self.invert_checkbox)
 
-        page.add_section("Surface Imperfections & Wear")
+        page.add_section("Painted Wear")
 
         paint_container = QWidget()
         paint_row = QHBoxLayout(paint_container)

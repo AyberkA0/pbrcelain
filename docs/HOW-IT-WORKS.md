@@ -27,7 +27,7 @@ large images. Chunk estimation instead:
 3. calibrates each crop's scale/offset to the reference (least-squares fit),
 4. cross-fades the crops back together.
 
-**Quality** (ultra / high / medium / low) controls the chunk size, **Tiles at once**
+**Quality** (ultra / high / medium / low) controls the chunk size, **Batch size**
 processes several chunks per forward pass on GPUs with enough VRAM, and the
 height map refines live on screen while chunks are processed.
 
@@ -49,13 +49,13 @@ fixes this and shapes the relief — all non-destructively, on the raw depth dat
   fit), high-pass, or keep raw depth.
 - **Correction curve editor** — separate X / Y curves that control how much
   correction is applied at each distance from the center, with live preview.
-- **Relief & crevice calibration**
+- **Gaps & cracks**
   - *Level out* levels regional lighting and tilt differences so all
     features sit on the same base plane.
   - *Deepen cracks* pushes mortar lines and joints down and lifts the surfaces
     between them (or softens them with negative values).
   - *Use photo edges* uses edges in the source photo to keep joints at the bottom.
-- **Fine tuning** — invert, gamma, smoothing, black and white point,
+- **Tone & smoothing** — invert, gamma, smoothing, percentile clipping (low/high),
   post-process seamless wrap.
 - **Output** — 8-bit PNG, 16-bit PNG or 32-bit float OpenEXR, chosen when exporting.
 
@@ -91,7 +91,7 @@ Any map can also be imported directly instead of generated.
 ## 3D preview
 
 Real-time OpenGL preview on a sphere, cube or plane using a Cook-Torrance / GGX
-shader (albedo, normal, roughness, AO), plus **Parallax Occlusion Mapping** driven
+shader (albedo, normal, roughness, ambient occlusion), plus **Parallax Occlusion Mapping** driven
 by the height map. Camera, lighting and display settings live in a separate View
 Options panel. Double-click any map to inspect it in a 2×2 tiled view to check for
 seams.

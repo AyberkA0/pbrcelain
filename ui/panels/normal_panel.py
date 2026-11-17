@@ -22,7 +22,7 @@ class NormalPanel(GeneratePropertiesContainer):
             "(you can still import a Normal map directly instead)."
         )
         self.note_label.setWordWrap(True)
-        self.note_label.setProperty("role", "dim")
+        self.note_label.setStyleSheet("color: #e5a50a;")  # warning yellow, readable in light and dark
         self.generate_page.add_wide(self.note_label)
 
         self.preset_combo = QComboBox()
@@ -37,7 +37,7 @@ class NormalPanel(GeneratePropertiesContainer):
         self.multi_freq_cb = QCheckBox("Set detail sizes separately")
         self.multi_freq_cb.setToolTip("Decompose surface relief into 3 independent frequency octaves.")
         self.multi_freq_cb.stateChanged.connect(self.propertiesChanged.emit)
-        self.generate_page.add_section("Multi-Frequency Detail Mixer", toggle=self.multi_freq_cb)
+        self.generate_page.add_section("Detail Sizes", toggle=self.multi_freq_cb)
 
         self.macro_spin = QDoubleSpinBox()
         self.macro_spin.setRange(0.0, 3.0)
@@ -66,7 +66,7 @@ class NormalPanel(GeneratePropertiesContainer):
         self.inject_albedo_cb = QCheckBox("Add grain from photo")
         self.inject_albedo_cb.setToolTip("Extract micro pore/fiber grain from Albedo photo and blend into normal map.")
         self.inject_albedo_cb.stateChanged.connect(self.propertiesChanged.emit)
-        self.generate_page.add_section("Albedo Photo Grain Injection", toggle=self.inject_albedo_cb)
+        self.generate_page.add_section("Photo Grain", toggle=self.inject_albedo_cb)
 
         self.albedo_strength_spin = QDoubleSpinBox()
         self.albedo_strength_spin.setRange(0.05, 2.0)

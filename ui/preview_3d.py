@@ -382,6 +382,9 @@ def _build_fullscreen_triangle() -> np.ndarray:
     return np.array([-1.0, -1.0, 3.0, -1.0, -1.0, 3.0], dtype=np.float32)
 
 
+# Degrees the auto-rotating model turns per frame at a speed setting of 1.
+ROTATION_STEP = 0.2
+
 class Preview3DWidget(QOpenGLWidget):
     distanceChanged = pyqtSignal(float)
     lightChanged = pyqtSignal(float, float)
@@ -403,7 +406,7 @@ class Preview3DWidget(QOpenGLWidget):
             "mesh": "plane",
             "fov": 75.0,
             "distance": 3.5,
-            "rotation_speed": 0.5,
+            "auto_rotate_speed": 1.0,
             "pivot_x": 0.0,
             "pivot_y": 0.0,
             "pivot_z": 0.0,
@@ -705,7 +708,7 @@ class Preview3DWidget(QOpenGLWidget):
 
     def _on_tick(self) -> None:
         if self._settings.get("auto_rotate") and not self._is_dragging:
-            self._azimuth = (self._azimuth + self._settings.get("rotation_speed", 0.5)) % 360.0
+            self._azimuth = (self._azimuth + self._settings.get("auto_rotate_speed", 1.0) * ROTATION_STEP) % 360.0
             self.update()
 
     def paintGL(self) -> None:

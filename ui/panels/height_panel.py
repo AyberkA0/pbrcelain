@@ -5,12 +5,10 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
-    QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QSpinBox,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -28,7 +26,6 @@ from ui.panels.base import GeneratePropertiesContainer
 import sys
 
 from ui.value_controls import Knob
-from ui.theme import legacy_style
 
 def _build_device_map() -> dict[str, str]:
     if sys.platform == "darwin":
@@ -69,7 +66,7 @@ class HeightPanel(GeneratePropertiesContainer):
             "(you can still import a Height image directly instead)."
         )
         self.note_label.setWordWrap(True)
-        self.note_label.setProperty("role", "dim")
+        self.note_label.setStyleSheet("color: #e5a50a;")  # warning yellow, readable in light and dark
         self.generate_page.add_wide(self.note_label)
 
         self._build_model_group()
@@ -88,13 +85,13 @@ class HeightPanel(GeneratePropertiesContainer):
 
     def _build_model_group(self) -> None:
         page = self.generate_page
-        page.add_section("Depth Model")
+        page.add_section("Depth Model", expanded=True)
 
         self.family_combo = QComboBox()
         self.family_combo.addItems(list(MODEL_CATALOG.keys()))
         self.family_combo.currentTextChanged.connect(self._on_family_changed)
         self.family_combo.setToolTip("Which AI depth model estimates the relief.")
-        page.add_param("Model", self.family_combo)
+        page.add_param("Model", self.family_combo, wide=True)
 
         self.variant_combo = QComboBox()
         self.variant_combo.currentTextChanged.connect(self.modelSettingsChanged.emit)
@@ -102,13 +99,12 @@ class HeightPanel(GeneratePropertiesContainer):
             "Larger models give more detail but are slower and need more memory.\n"
             "Depth Anything V2 Base and Large may only be used for non-commercial work (CC BY-NC 4.0)."
         )
-        page.add_param("Size", self.variant_combo)
 
         self.device_combo = QComboBox()
         self.device_combo.addItems(list(DEVICE_MAP.keys()))
         self.device_combo.currentTextChanged.connect(self.modelSettingsChanged.emit)
         self.device_combo.setToolTip("Where the model runs. GPU is much faster when available.")
-        page.add_param("Run on", self.device_combo)
+        page.add_pair(("Size", self.variant_combo), ("Run on", self.device_combo))
 
 
         self._on_family_changed(self.family_combo.currentText())
@@ -158,20 +154,20 @@ class HeightPanel(GeneratePropertiesContainer):
             "Higher quality, but requires more computation."
         )
         self.chunk_checkbox.stateChanged.connect(self._on_chunk_toggled)
-        page.add_section("Chunk Estimation", toggle=self.chunk_checkbox)
+        page.add_section("More Detail with Chunks", toggle=self.chunk_checkbox)
 
         self.chunk_batch_spin = QSpinBox()
         self.chunk_batch_spin.setRange(1, 16)
         self.chunk_batch_spin.setValue(1)
         self.chunk_batch_spin.setToolTip(
-            "How many tiles the model works on at the same time. Higher is faster but needs more GPU memory.\n"
+            "How many chunks the model works on at the same time. Higher is faster but needs more GPU memory.\n"
             "Graphics card with 8 GB or more: 2 to 4. Smaller cards: 1 or 2. On the CPU: 1."
         )
         # Kept for code that enables/disables it alongside the spin box; the label's tooltip replaces the icon.
         self.batch_info_label = QLabel()
         self.batch_info_label.hide()
 
-        page.add_param("Tiles at once", self.chunk_batch_spin)
+        page.add_param("Batch size", self.chunk_batch_spin, plain=True)
 
         self.effort_combo = QComboBox()
         self.effort_combo.addItems(["ultra", "high", "medium", "low"])
@@ -266,7 +262,7 @@ class HeightPanel(GeneratePropertiesContainer):
 
     def _build_settings_group(self) -> None:
         page = self.properties_page
-        page.add_section("Height Map Settings")
+        page.add_section("Overall Shape")
 
         self.detrend_combo = QComboBox()
         self.detrend_combo.addItems(list(DETREND_MAP.keys()))
@@ -302,7 +298,7 @@ class HeightPanel(GeneratePropertiesContainer):
         self.gamma_spin.setToolTip("Below 1 raises the middle heights, above 1 lowers them. Highest and lowest points stay put.")
         page.add_param("Midtones", self.gamma_spin)
 
-        page.add_section("Relief & Crevice Calibration")
+        page.add_section("Gaps & Cracks")
 
         self.local_eq_spin = QDoubleSpinBox()
         self.local_eq_spin.setRange(0.0, 1.0)
@@ -343,7 +339,7 @@ class HeightPanel(GeneratePropertiesContainer):
         self.albedo_guidance_spin.setToolTip("Uses color edges in the photo to keep gaps at the bottom. Helps with bricks and tiles.")
         page.add_param("Use photo edges", self.albedo_guidance_spin)
 
-        page.add_section("Fine Tuning")
+        page.add_section("Tone & Smoothing")
 
         self.blur_spin = QSpinBox()
         self.blur_spin.setRange(0, 25)
@@ -358,7 +354,7 @@ class HeightPanel(GeneratePropertiesContainer):
         self.low_pct_spin.valueChanged.connect(self.propertiesChanged.emit)
         self.low_pct_spin.setSuffix(" %")
         self.low_pct_spin.setToolTip("Darkest share of the surface (in %) that becomes the lowest point. Raises contrast.")
-        page.add_param("Black point", Knob(self.low_pct_spin, default=1.0))
+        page.add_param("Clip low", Knob(self.low_pct_spin, default=1.0))
 
         self.high_pct_spin = QDoubleSpinBox()
         self.high_pct_spin.setRange(51.0, 100.0)
@@ -367,42 +363,12 @@ class HeightPanel(GeneratePropertiesContainer):
         self.high_pct_spin.valueChanged.connect(self.propertiesChanged.emit)
         self.high_pct_spin.setSuffix(" %")
         self.high_pct_spin.setToolTip("Brightest share of the surface (in %) that becomes the highest point. Raises contrast.")
-        page.add_param("White point", Knob(self.high_pct_spin, default=99.0))
+        page.add_param("Clip high", Knob(self.high_pct_spin, default=99.0))
 
         reset_btn = QPushButton("Reset to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)
         page.end_section()
         page.add_wide(reset_btn)
-
-        info_card = QFrame()
-        info_card.setObjectName("HeightWorkflowCard")
-        legacy_style(info_card, """
-            QFrame#HeightWorkflowCard {
-                background-color: #282828;
-                border: 1px solid #202020;
-                border-left: 3px solid #1473e6;
-                border-radius: 3px;
-                margin-top: 6px;
-            }
-        """)
-        card_layout = QVBoxLayout(info_card)
-        card_layout.setContentsMargins(10, 8, 10, 8)
-        card_layout.setSpacing(4)
-
-        card_title = QLabel("Workflow Recommendation")
-        legacy_style(card_title, "background-color: transparent; font-weight: bold; font-size: 11px; color: #1473e6;", "card-title")
-        card_layout.addWidget(card_title)
-
-        card_text = QLabel(
-            "After fine-tuning adjustments (curve/bowl correction, relief, and guide filters) "
-            "to suit your image, creating the map again (<b>Create Height from Albedo</b>) is recommended "
-            "for the highest-quality, full-resolution output."
-        )
-        card_text.setWordWrap(True)
-        legacy_style(card_text, "background-color: transparent; color: #a0a0a0; font-size: 11px; line-height: 140%;", "hint")
-        card_layout.addWidget(card_text)
-
-        page.add_wide(info_card)
 
         self._on_detrend_mode_changed(self.detrend_combo.currentText())
 

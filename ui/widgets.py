@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QEvent, QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPainter, QPainterPath, QPalette, QPixmap
+from PyQt6.QtGui import QColor, QDragEnterEvent, QDropEvent, QPainter, QPainterPath, QPalette, QPixmap
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 
 from ui.theme import PLATFORM_THEME
@@ -11,7 +11,22 @@ IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp")
 
 
 class SlotButton(QPushButton):
+    """Map slot button. Its size never depends on its text, so the strip can
+    show or hide the map names by width without the layout jumping."""
+
     doubleClicked = pyqtSignal()
+
+    def sizeHint(self):
+        text = self.text()
+        if not text:
+            return super().sizeHint()
+        self.setText("")
+        hint = super().sizeHint()
+        self.setText(text)
+        return hint
+
+    def minimumSizeHint(self):
+        return self.sizeHint()
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -65,6 +80,27 @@ class ImageLabel(QLabel):
         )
         scaled.setDevicePixelRatio(dpr)
         super().setPixmap(scaled)
+
+    def set_checker_background(self, enabled: bool = True) -> None:
+        """Gray checkerboard behind the image, as image editors show empty space."""
+        self._checker = enabled
+        self.update()
+
+    def paintEvent(self, event):
+        if getattr(self, "_checker", False):
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            path = QPainterPath()
+            path.addRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 8, 8)
+            painter.setClipPath(path)
+            cell = 8
+            light, dark = QColor(92, 92, 92), QColor(68, 68, 68)
+            painter.fillRect(self.rect(), dark)
+            for y in range(0, self.height(), cell):
+                for x in range((y // cell) % 2 * cell, self.width(), cell * 2):
+                    painter.fillRect(x, y, cell, cell, light)
+            painter.end()
+        super().paintEvent(event)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

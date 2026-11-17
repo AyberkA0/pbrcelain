@@ -36,10 +36,10 @@ def _enhance_form(group: QWidget) -> QWidget:
             continue
         label, field = label_item.widget(), field_item.widget()
         spin = find_spin(field)
-        if spin is None or not isinstance(label, QLabel):
+        if spin is None or not isinstance(label, QLabel) or label.text().startswith("Pivot"):
             continue
         attach_scrub(label, spin)
-        if spin is field and not label.text().startswith("Pivot"):
+        if spin is field:
             form.removeWidget(spin)
             form.setWidget(row, QFormLayout.ItemRole.FieldRole, slider_field(spin, stacked=False))
     return group
@@ -74,6 +74,9 @@ class PreviewPropertiesPanel(QWidget):
             tab_host_layout.setContentsMargins(2, 2, 2, 2)
             tab_host_layout.setSpacing(2)
             tabs_row.addWidget(segment, 1)
+            self._tab_bar = segment
+        else:
+            self._tab_bar = None
 
         self._tab_group = QButtonGroup(self)
         self._tab_group.setExclusive(True)
@@ -110,6 +113,18 @@ class PreviewPropertiesPanel(QWidget):
         if not IS_MAC:
             tabs_row.addStretch(1)
 
+        # When the 3D view is too narrow for every tab name, a drop-down takes
+        # the tabs' place instead of cutting their names off.
+        self._tab_titles = [title for title, _build in pages]
+        self._tabs_needed = sum(
+            self._tab_group.button(i).fontMetrics().horizontalAdvance(t) + 22 for i, t in enumerate(self._tab_titles)
+        ) + 40
+        self._tab_combo = QComboBox()
+        self._tab_combo.addItems(self._tab_titles)
+        self._tab_combo.setVisible(False)
+        self._tab_combo.currentIndexChanged.connect(self._on_tab_combo_changed)
+        tabs_row.addWidget(self._tab_combo, 1)
+
         self._tab_group.button(0).setChecked(True)
         self._tab_group.idClicked.connect(self._on_tab_clicked)
 
@@ -120,7 +135,25 @@ class PreviewPropertiesPanel(QWidget):
 
     def _on_tab_clicked(self, index: int) -> None:
         self._stack.setCurrentIndex(index)
+        self._tab_combo.blockSignals(True)
+        self._tab_combo.setCurrentIndex(index)
+        self._tab_combo.blockSignals(False)
         self.tabChanged.emit()
+
+    def _on_tab_combo_changed(self, index: int) -> None:
+        self._tab_group.button(index).setChecked(True)
+        self._on_tab_clicked(index)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        compact = self.width() < self._tabs_needed
+        if compact == self._tab_combo.isVisible():
+            return
+        self._tab_combo.setVisible(compact)
+        for button in self._tab_group.buttons():
+            button.setVisible(not compact)
+        if self._tab_bar is not None:
+            self._tab_bar.setVisible(not compact)
 
     def content_height(self) -> int:
         """Height needed to show the current tab without scrolling."""
@@ -157,9 +190,10 @@ class PreviewPropertiesPanel(QWidget):
         self.distance_spin.valueChanged.connect(self._emit_changed)
 
         self.rotation_speed_spin = QDoubleSpinBox()
-        self.rotation_speed_spin.setRange(0.0, 5.0)
+        # 1 is the comfortable default turn rate; see ROTATION_STEP in preview_3d.
+        self.rotation_speed_spin.setRange(0.0, 10.0)
         self.rotation_speed_spin.setSingleStep(0.1)
-        self.rotation_speed_spin.setValue(0.5)
+        self.rotation_speed_spin.setValue(1.0)
         self.rotation_speed_spin.valueChanged.connect(self._emit_changed)
 
         self.pivot_x_spin = QDoubleSpinBox()
@@ -186,9 +220,21 @@ class PreviewPropertiesPanel(QWidget):
         layout.addRow("FOV:", self.fov_spin)
         layout.addRow("Distance:", self.distance_spin)
         layout.addRow("Rotation Speed:", self.rotation_speed_spin)
-        layout.addRow("Pivot X:", self.pivot_x_spin)
-        layout.addRow("Pivot Y:", self.pivot_y_spin)
-        layout.addRow("Pivot Z:", self.pivot_z_spin)
+        pivot_row = QWidget()
+        pivot_layout = QHBoxLayout(pivot_row)
+        pivot_layout.setContentsMargins(0, 0, 0, 0)
+        pivot_layout.setSpacing(6)
+        for axis, spin in (("X", self.pivot_x_spin), ("Y", self.pivot_y_spin), ("Z", self.pivot_z_spin)):
+            axis_label = QLabel(axis)
+            axis_label.setProperty("role", "dim")
+            attach_scrub(axis_label, spin)
+            # No arrows: three spin boxes share one row, and the arrows would leave
+            # too little room for the value. Drag the axis letter or type instead.
+            spin.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
+            spin.setMinimumWidth(48)
+            pivot_layout.addWidget(axis_label)
+            pivot_layout.addWidget(spin, 1)
+        layout.addRow("Pivot:", pivot_row)
 
         reset_pivot_btn = QPushButton("Reset Pivot")
         reset_pivot_btn.setToolTip("Reset camera target pivot point back to (0, 0, 0)")
@@ -263,9 +309,19 @@ class PreviewPropertiesPanel(QWidget):
         self.uv_tiling_spin.setToolTip("Tile the texture across the surface to test seamless wrapping.")
         self.uv_tiling_spin.valueChanged.connect(self._emit_changed)
 
-        layout.addRow("Show Grid:", self.show_grid_checkbox)
-        layout.addRow("Auto Rotate:", self.auto_rotate_checkbox)
-        layout.addRow("Wireframe Mode:", self.wireframe_checkbox)
+        toggles = QWidget()
+        toggles_layout = QHBoxLayout(toggles)
+        toggles_layout.setContentsMargins(0, 0, 0, 0)
+        toggles_layout.setSpacing(18)
+        for text, box in (
+            ("Grid", self.show_grid_checkbox),
+            ("Auto rotate", self.auto_rotate_checkbox),
+            ("Wireframe", self.wireframe_checkbox),
+        ):
+            box.setText(text)
+            toggles_layout.addWidget(box)
+        toggles_layout.addStretch(1)
+        layout.addRow("Show:", toggles)
         layout.addRow("UV Tiling:", self.uv_tiling_spin)
         return group
 
@@ -349,7 +405,7 @@ class PreviewPropertiesPanel(QWidget):
             "mesh": MESH_VALUES.get(self.mesh_combo.currentText(), DEFAULT_MESH),
             "fov": self.fov_spin.value(),
             "distance": self.distance_spin.value(),
-            "rotation_speed": self.rotation_speed_spin.value(),
+            "auto_rotate_speed": self.rotation_speed_spin.value(),
             "pivot_x": self.pivot_x_spin.value(),
             "pivot_y": self.pivot_y_spin.value(),
             "pivot_z": self.pivot_z_spin.value(),
@@ -375,7 +431,13 @@ class PreviewPropertiesPanel(QWidget):
         self.mesh_combo.setCurrentText(MESH_LABELS.get(data.get("mesh", DEFAULT_MESH), MESH_LABELS[DEFAULT_MESH]))
         self.fov_spin.setValue(data.get("fov", self.fov_spin.value()))
         self.distance_spin.setValue(data.get("distance", self.distance_spin.value()))
-        self.rotation_speed_spin.setValue(data.get("rotation_speed", self.rotation_speed_spin.value()))
+        if "auto_rotate_speed" in data:
+            self.rotation_speed_spin.setValue(data["auto_rotate_speed"])
+        elif "rotation_speed" in data:
+            # Older settings stored degrees per frame; 1 on the new scale is ROTATION_STEP degrees.
+            from ui.preview_3d import ROTATION_STEP
+
+            self.rotation_speed_spin.setValue(data["rotation_speed"] / ROTATION_STEP)
         self.pivot_x_spin.setValue(data.get("pivot_x", self.pivot_x_spin.value()))
         self.pivot_y_spin.setValue(data.get("pivot_y", self.pivot_y_spin.value()))
         self.pivot_z_spin.setValue(data.get("pivot_z", self.pivot_z_spin.value()))

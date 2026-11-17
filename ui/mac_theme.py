@@ -266,7 +266,7 @@ QGroupBox::title {{
     font-size: 12px;
 }}
 
-QFrame#PainterCard, QFrame#HeightWorkflowCard {{
+QFrame#PainterCard {{
     background-color: {t["group"]};
     border: 1px solid {t["hairline"]};
     border-radius: 10px;
@@ -646,6 +646,12 @@ ImageLabel {{
     color: {t["well_text"]};
     border: 1px solid {t["well_border"]};
     border-radius: 8px;
+}}
+
+ImageLabel#MapWell {{
+    background-color: transparent;
+    color: #d0d0d0;
+    font-weight: 300;
 }}
 
 QWidget#ToolbarPanel {{

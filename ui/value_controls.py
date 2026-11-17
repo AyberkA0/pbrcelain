@@ -254,6 +254,13 @@ class Knob(QWidget):
         self.setToolTip(f"{tip}\n\n{hint}" if tip else hint)
         self.setEnabled(_own_enabled(spin))
 
+    def set_default(self, value: float) -> None:
+        """The value a double-click restores."""
+        self._default = float(value)
+
+    def spin_box(self) -> QAbstractSpinBox:
+        return self._spin
+
     def _set(self, value: float) -> None:
         # QSpinBox only accepts ints; a float raises and would abort the app.
         if _is_int(self._spin):

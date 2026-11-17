@@ -17,6 +17,7 @@ class ModelLoadWorker(QThread):
     progress = pyqtSignal(str)
     finished_ok = pyqtSignal()
     failed = pyqtSignal(str)
+    cancelled = pyqtSignal()
 
     def __init__(self, estimator: DepthEstimator, parent=None):
         super().__init__(parent)
@@ -26,6 +27,8 @@ class ModelLoadWorker(QThread):
         try:
             self.estimator.load(progress_cb=self.progress.emit)
             self.finished_ok.emit()
+        except InferenceCancelled:
+            self.cancelled.emit()
         except Exception as exc:
             self.failed.emit(str(exc))
 

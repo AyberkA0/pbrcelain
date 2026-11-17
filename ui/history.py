@@ -1,7 +1,8 @@
 """Undo / redo for the material being edited.
 
 A snapshot holds everything the user can change: the imported and generated
-images, every panel's settings and the last saved Adjustment state per map.
+images, every panel's settings, the View Options and the last saved Adjustment
+state per map.
 Images are never modified in place (each change stores a new image object), so
 a snapshot only keeps references and costs almost no memory.
 
@@ -30,6 +31,7 @@ class Snapshot:
     saved: dict
     label: str = ""
     current_map: Any = None
+    view: dict | None = None  # View Options (3D preview) settings
 
     def same_as(self, other: "Snapshot") -> bool:
         return (
@@ -38,6 +40,7 @@ class Snapshot:
             and self.height_depth is other.height_depth
             and self.panels == other.panels
             and self.saved == other.saved
+            and self.view == other.view
         )
 
 

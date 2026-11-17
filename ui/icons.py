@@ -30,6 +30,37 @@ def _pixmap(svg: str, color: str) -> QPixmap:
     return pixmap
 
 
+def overlay_icon(name: str) -> QIcon:
+    """White glyph for buttons drawn on top of an image, whatever the theme."""
+    with open(os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8") as f:
+        svg = f.read()
+    icon = QIcon(_pixmap(svg, "#ffffff"))
+    faded = QPixmap(_pixmap(svg, "#ffffff").size())
+    faded.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(faded)
+    painter.setOpacity(0.35)
+    painter.drawPixmap(0, 0, _pixmap(svg, "#ffffff"))
+    painter.end()
+    icon.addPixmap(faded, QIcon.Mode.Disabled)
+    return icon
+
+
+def subtle_icon(name: str) -> QIcon:
+    """Theme icon in the secondary text color, for quiet chrome like the title bar."""
+    with open(os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8") as f:
+        svg = f.read()
+    _normal, dim = _colors()
+    icon = QIcon(_pixmap(svg, dim))
+    faded = QPixmap(_pixmap(svg, dim).size())
+    faded.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(faded)
+    painter.setOpacity(0.4)
+    painter.drawPixmap(0, 0, _pixmap(svg, dim))
+    painter.end()
+    icon.addPixmap(faded, QIcon.Mode.Disabled)
+    return icon
+
+
 def themed_icon(name: str) -> QIcon:
     with open(os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8") as f:
         svg = f.read()

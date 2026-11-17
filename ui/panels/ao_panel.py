@@ -22,7 +22,7 @@ class AOPanel(GeneratePropertiesContainer):
             "(you can still import an Ambient Occlusion map directly instead)."
         )
         self.note_label.setWordWrap(True)
-        self.note_label.setProperty("role", "dim")
+        self.note_label.setStyleSheet("color: #e5a50a;")  # warning yellow, readable in light and dark
         self.generate_page.add_wide(self.note_label)
 
         self.method_combo = QComboBox()
@@ -67,7 +67,7 @@ class AOPanel(GeneratePropertiesContainer):
         self.search_percent_spin.valueChanged.connect(self.propertiesChanged.emit)
         self.generate_page.add_param("Search distance", self.search_percent_spin)
 
-        self.generate_page.add_section("Horizon Ray Sampling")
+        self.generate_page.add_section("Quality & Reach")
 
         self.samples_combo = QComboBox()
         self.samples_combo.addItems(["Fast", "Balanced", "High", "Ultra"])
@@ -99,7 +99,7 @@ class AOPanel(GeneratePropertiesContainer):
         self.generate_page.add_stretch()
 
         page = self.properties_page
-        page.add_section("Intensity & Curve")
+        page.add_section("Shadow Look")
 
         self.strength_spin = QDoubleSpinBox()
         self.strength_spin.setRange(0.1, 5.0)

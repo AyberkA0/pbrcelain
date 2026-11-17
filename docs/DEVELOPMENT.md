@@ -87,6 +87,6 @@ layout (e.g. a renamed `.pcln`) opens as a project too.
 
 Commands (the File menu on macOS, the command bar on Windows): **New Project /
 Open Project / Open Recent / Save / Save As / Export Maps**.
-**Export Maps** asks for the Height and AO bit depth and whether to include a
+**Export Maps** asks for the Height and Ambient Occlusion bit depth and whether to include a
 curvature map, then writes every available map to a folder (PNG, or EXR for
 32-bit height maps).
