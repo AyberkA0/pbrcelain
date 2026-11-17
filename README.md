@@ -9,27 +9,23 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/AyberkA0/pbrcelain/releases"><img src="https://img.shields.io/badge/Download-macOS%20%7C%20Windows-0a84ff?style=for-the-badge" alt="Download for macOS or Windows"></a>
   <a href="https://buymeabitcoffee.vercel.app/btc/bc1qhae9un6j8mel5xcrd4trajm65wfunlltkzelh7?identifier=Buy+Me+a+Coffee"><img src="https://img.shields.io/badge/☕%20Buy%20Me%20a%20Coffee-Donate-f7931a?style=for-the-badge&logo=bitcoin&logoColor=white" alt="Buy Me a Coffee"></a>
 </p>
-
-PBRCELAIN is a PyQt6 desktop app built around one job: extracting high-quality
-height maps from ordinary material photos (stone, brick, wood, tiles, fabric…)
-using state-of-the-art monocular depth estimation, then correcting the typical
-artifacts those models produce. Normal, Roughness and Ambient Occlusion maps are
-derived from the resulting height map, and everything can be inspected live on a
-3D preview.
-
-Inspired by Substance 3D Sampler, Materialize and Quixel Mixer, but deliberately
-simpler: one material, one window.
 
 <p align="center">
   <img src="docs/media/app-window.png" alt="PBRCELAIN main window on macOS: material slots and map settings on the left, 3D viewport on the right" width="760">
 </p>
 
+PBRCELAIN is a free desktop app that turns an ordinary photo of a surface (stone,
+brick, wood, tiles, fabric…) into the texture maps a game engine or 3D renderer
+needs: **Height, Normal, Roughness and Ambient Occlusion**. An AI depth model
+estimates the relief from the photo, the other maps are built from it, and you see
+the result live on a 3D preview.
+
 ## Showcase
 
-Materials generated from single photos, previewed in the built-in 3D viewport
-(height-driven parallax, normal, roughness and AO under the default sky).
+Materials generated from single photos, previewed in the built-in 3D viewport.
 
 <p align="center">
   <img src="docs/media/tree-bark.gif" alt="Tree bark material in the 3D viewport" width="520"><br>
@@ -50,194 +46,53 @@ Materials generated from single photos, previewed in the built-in 3D viewport
   <sub>Source textures for the demos from <a href="https://polyhaven.com">Poly Haven</a> (CC0) — thank you!</sub>
 </p>
 
-## Height map generation
-
-### Depth models
-
-| Family | Variants | Character |
-| --- | --- | --- |
-| **Depth Anything V2** | Small / Base / Large | Fast, stable relative depth; great general-purpose default. |
-| **Marigold** | LCM (fast) / v1.1 | Diffusion-based; exceptional micro-relief on joints, grain and organic surfaces. |
-
-Models are downloaded from Hugging Face on first use and can run on **CUDA GPUs**,
-**Apple Silicon (MPS)** or **CPU**. If a GPU is explicitly selected but not
-available, the app reports why (e.g. a CPU-only PyTorch build) instead of
-silently falling back to CPU.
-
-### Chunk estimation (high-resolution detail)
-
-A single model pass squeezes the whole photo into the model's native input size
-(518 px for Depth Anything, 768 px for Marigold), which smears fine detail on
-large images. Chunk estimation instead:
-
-1. runs one full-image pass as a trusted large-scale reference,
-2. re-runs the model on overlapping crops near its native resolution,
-3. calibrates each crop's scale/offset to the reference (least-squares fit),
-4. cross-fades the crops back together.
-
-**Effort** (ultra / high / medium / low) controls the chunk size, **Batch size**
-processes several chunks per forward pass on GPUs with enough VRAM, and the
-height map refines live on screen while chunks are processed.
-
-### Seamless (tileable) generation
-
-With **Seamless** enabled, the source is expanded into a 3×3 tiled canvas before
-inference, so the model sees real neighboring content across every edge. The
-result is cropped back and the borders and corners are blended so the height map
-tiles with no visible seam. **Force seamless with blur** additionally softens hard
-seams in the source photo before the depth model runs.
-
-### Correcting depth-model artifacts
-
-Monocular depth models are trained on perspective scenes, so on flat material
-photos they tend to add a large-scale "bowl" or "dome" shape. The Adjustment page
-fixes this and shapes the relief — all non-destructively, on the raw depth data:
-
-- **Flatten curvature** — remove bowl/dome (quadratic fit), remove tilt (plane
-  fit), high-pass, or keep raw depth.
-- **Bowl correction curve editor** — separate X / Y curves that control how much
-  correction is applied at each distance from the center, with live preview.
-- **Relief & crevice calibration**
-  - *Local equalization* levels regional lighting and tilt differences so all
-    features sit on the same base plane.
-  - *Crevice depth* pushes mortar lines and joints down and lifts the surfaces
-    between them (or softens them with negative values).
-  - *Albedo guidance* uses edges in the source photo to keep joints at the bottom.
-- **Fine tuning** — invert, gamma, smoothing, percentile clipping (low/high),
-  post-process seamless wrap.
-- **Output** — 8-bit PNG, 16-bit PNG or 32-bit float OpenEXR, chosen when exporting.
-
-Edits preview instantly on a downscaled copy; **Save** commits them at full
-resolution, **Revert** discards them. The raw depth field is stored in the
-project file, so height adjustments stay editable after reopening a project
-without re-running the model.
-
-## Derived maps
-
-- **Normal** — Sobel-gradient normal map from the height map, with engine presets
-  (OpenGL / Blender / Unity +Y, DirectX / Unreal −Y), strength, pre-smoothing, a
-  multi-frequency mixer (macro / medium / micro detail) and optional photo-grain
-  injection from the albedo.
-- **Roughness** — estimated from local normal variance (Toksvig-style), with
-  material presets, height-cavity and albedo-contrast blending, and a painter for
-  hand-drawn wear, rust or glossy areas. This is a heuristic starting point, not a
-  measurement of real surface roughness.
-- **Ambient Occlusion** — ray-traced over the height field as a real 3D surface:
-  you give its real-world scale (surface width and maximum depth) and each
-  pixel's sky visibility is traced in 4–16 directions, so crevices darken by
-  their actual depth and width and the result looks the same at any resolution.
-  The original fast approximation remains available as the *Classic* method
-  (projects saved before keep using it). Strength, contrast; 8- or 16-bit output, chosen when exporting.
-- **Curvature** — exported alongside the other maps (optional, in the Export
-  Maps dialog): mid-grey is flat, brighter marks edges and ridges, darker marks
-  cavities; the usual mask for edge wear and dirt in material graphs.
-- **Albedo** — used as imported, with optional auto white balance, color-range
-  shifting and seamless edge blending.
-
-Any map can also be imported directly instead of generated.
-
-## 3D preview
-
-Real-time OpenGL preview on a sphere, cube or plane using a Cook-Torrance / GGX
-shader (albedo, normal, roughness, AO), plus **Parallax Occlusion Mapping** driven
-by the height map. Camera, lighting and display settings live in a separate View
-Options panel. Double-click any map to inspect it in a 2×2 tiled view to check for
-seams.
-
 ## Download
 
 Ready-to-run builds for **macOS (Apple Silicon)** and **Windows (64-bit)** are on the
-[Releases page](https://github.com/AyberkA0/pbrcelain-material-generator/releases/latest) —
-no Python needed. The app itself is a small download; the depth-estimation
-components (PyTorch and the model runtime, about 160 MB) are downloaded once, the
-first time you generate a map. The Windows build runs depth models on the CPU; for
-NVIDIA GPU acceleration, install from source as below.
+[Releases page](https://github.com/AyberkA0/pbrcelain/releases) — no Python needed.
+The app itself is a small download; the AI components (about 160 MB) are
+downloaded once, the first time you create a Height map. The Windows build runs
+depth models on the CPU; for NVIDIA GPU acceleration, [run it from source](docs/DEVELOPMENT.md).
 
-## Installation
+### First launch on macOS
 
-For NVIDIA GPU acceleration:
-```bash
-python -m venv venv
-venv\Scripts\activate
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-pip install -r requirements.txt
-```
+The app is not notarized by Apple yet, so macOS blocks it the first time:
 
-For other:
-```bash
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-```
+1. Open the DMG and drag **PBRCELAIN** into **Applications**.
+2. Open it once. When macOS says it cannot verify the app, click **Done**.
+3. Go to **System Settings › Privacy & Security**, scroll down and click
+   **Open Anyway** next to PBRCELAIN, then confirm.
 
-On Apple Silicon, the standard `pip install torch torchvision` includes MPS support.
-
-## Running
+You only need to do this once. If macOS instead says the app **is damaged**, run
+this in Terminal and open it again:
 
 ```bash
-venv\Scripts\python main.py
+xattr -dr com.apple.quarantine /Applications/PBRCELAIN.app
 ```
 
-Always start the app with the venv's Python so the correct PyTorch build is used.
-A project can be opened directly: `venv\Scripts\python main.py my_material.pcln`
+## Getting started
 
-### Start menu shortcut and `.pcln` association (Windows)
+1. **Import a photo** into the Albedo slot (the one that pulses).
+2. Select the **Height** slot and click **Create Height from Albedo**. The first run
+   downloads the AI components and the depth model.
+3. Create **Normal**, **Roughness** and **AO** the same way, fine-tune them on the
+   **Adjustment** page, then use **Export** to write every map to a folder.
 
-```bash
-venv\Scripts\python register_file_association.py
-```
+Hover over any setting to see what it does. Projects are saved as `.pcln` files that
+keep everything, so you can reopen and keep adjusting without re-running the model.
 
-This associates `.pcln` with PBRCELAIN for the current user only
-(`HKEY_CURRENT_USER`, no admin rights needed) and adds a PBRCELAIN shortcut to
-the Start menu. The app starts without a console window and writes its output to
-`%LOCALAPPDATA%\PBRCELAIN\pbrcelain.log`. Re-run the command if you move the
-project folder; remove the association and the shortcut with `--unregister`.
+## Learn more
 
-### macOS app bundle and `.pcln` association
+- [How it works](docs/HOW-IT-WORKS.md): the depth models, high-resolution and seamless
+  generation, artifact correction, and how each map is derived.
+- [Running from source](docs/DEVELOPMENT.md): installing with Python, GPU setup,
+  file associations and project file details.
 
-```bash
-venv/bin/python build_macos_app.py
-```
+## License
 
-This installs a `PBRCELAIN.app` launcher in `~/Applications` that runs this
-project folder with the venv's Python. The app shows up under its own name and
-icon in the Dock, Launchpad and Spotlight, and double-clicking a `.pcln` file in
-Finder (or dropping one on the Dock icon) opens it. Output goes to
-`~/Library/Logs/PBRCELAIN/pbrcelain.log`. Re-run the command if you move the
-project folder or recreate the venv; remove the app with `--uninstall`
-(`--dest DIR` installs elsewhere, e.g. `/Applications`).
+PBRCELAIN is free software under the [GNU General Public License v3.0](LICENSE).
 
-### Platform look and input
-
-On macOS and Windows the interface follows the system Light/Dark appearance and
-accent color, in each platform's own design language: macOS controls with the
-menu bar at the top of the screen, and Windows 11 (Fluent) controls with a
-themed title bar and an in-window command bar. Window size and section split are
-remembered between sessions, and recent projects are one click away (**File →
-Open Recent** on macOS, the arrow next to **Open** on Windows).
-
-Trackpads work in the 3D viewport, tiled preview and imperfection painter:
-pinch to zoom and swipe with two fingers to orbit (3D) or pan. The imperfection
-painter also takes pen input (Wacom, Surface Pen): pressure sets brush size and
-flow, and the pen's eraser end erases. On Windows, long jobs show progress on
-the taskbar button.
-
-### App icon
-
-The icon artwork lives in `ui/assets/app_icon_source.jpg`. After replacing it,
-run `python make_icons.py` to regenerate the squircle icons (`app_icon.png`,
-`app_icon.ico` for Windows, and the macOS version on Apple's icon grid), then
-re-run `build_macos_app.py` on macOS.
-
-## Project files (`.pcln`)
-
-Work is saved as a `.pcln` project: a zip archive holding the source images,
-generated maps, the raw depth data and every parameter. Reopening a project
-restores everything without re-running the depth model. A `.zip` with the same
-layout (e.g. a renamed `.pcln`) opens as a project too.
-
-Commands (the File menu on macOS, the command bar on Windows): **New Project /
-Open Project / Open Recent / Save / Save As / Export Maps**.
-**Export Maps** asks for the Height and AO bit depth and whether to include a
-curvature map, then writes every available map to a folder (PNG, or EXR for
-32-bit height maps).
+The depth models are downloaded from Hugging Face and come with their own licenses.
+**Depth Anything V2 Base and Large are licensed for non-commercial use only**
+(CC BY-NC 4.0). For commercial work, use Depth Anything V2 Small (Apache 2.0),
+Marigold Fast (Apache 2.0) or Marigold Standard (CreativeML Open RAIL++-M).
