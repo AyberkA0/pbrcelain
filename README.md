@@ -5,11 +5,11 @@
 <h1 align="center">PBRCELAIN</h1>
 
 <p align="center">
-  <a href="https://github.com/AyberkA0/pbrcelain/releases"><img src="https://img.shields.io/badge/Download-macOS%20%7C%20Windows-0a84ff?style=for-the-badge" alt="Download for macOS or Windows"></a>
+  <strong>Turn a single photo into a clean, tileable height map — and a full PBR material around it.</strong>
 </p>
 
 <p align="center">
-  <strong>Turn a single photo into a clean, tileable height map — and a full PBR material around it.</strong>
+  <a href="https://github.com/AyberkA0/pbrcelain/releases"><img src="https://img.shields.io/badge/Download-macOS%20%7C%20Windows-0a84ff?style=for-the-badge" alt="Download for macOS or Windows"></a>
 </p>
 
 <p align="center">
