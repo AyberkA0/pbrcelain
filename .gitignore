@@ -5,3 +5,4 @@ height_maps/
 .DS_Store
 build/
 dist/
+ai_runtime.json

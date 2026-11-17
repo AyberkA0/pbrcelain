@@ -148,8 +148,10 @@ seams.
 
 Ready-to-run builds for **macOS (Apple Silicon)** and **Windows (64-bit)** are on the
 [Releases page](https://github.com/AyberkA0/pbrcelain-material-generator/releases/latest) —
-no Python needed. The Windows build runs depth models on the CPU; for NVIDIA GPU
-acceleration, install from source as below.
+no Python needed. The app itself is a small download; the depth-estimation
+components (PyTorch and the model runtime, about 160 MB) are downloaded once, the
+first time you generate a map. The Windows build runs depth models on the CPU; for
+NVIDIA GPU acceleration, install from source as below.
 
 ## Installation
 

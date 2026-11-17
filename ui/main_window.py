@@ -63,6 +63,7 @@ from ui.history import History, Snapshot
 from ui.icons import slot_icon, themed_icon
 from ui.widgets import IMAGE_EXTENSIONS, ImageLabel, PulseGlow, SlotButton, ToggleHeading
 from ui.workers import (
+    AIRuntimeInstallWorker,
     ExportWorker,
     InferenceWorker,
     ModelLoadWorker,
@@ -1366,6 +1367,63 @@ class MainWindow(QMainWindow):
         self._properties_preview_pending = False
         self._properties_debounce.stop()
 
+    def _ensure_ai_runtime(self, then) -> bool:
+        """True when the depth models can run now. Otherwise offers to download
+        the AI components (packaged app only) and calls `then` once they are in."""
+        from core import ai_runtime
+
+        if not ai_runtime.needs_download():
+            if ai_runtime.is_frozen() and not ai_runtime.activate():
+                QMessageBox.critical(self, "AI components missing", "This build cannot load the depth models.")
+                return False
+            return True
+        size_mb = ai_runtime.download_size() / 1e6
+        answer = QMessageBox.question(
+            self,
+            "Download AI components?",
+            "Generating maps needs the depth-estimation components (PyTorch and the model runtime), "
+            f"which are downloaded once: about {size_mb:.0f} MB.\n\n"
+            "The depth model itself is downloaded separately the first time you use it.\n\nDownload now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return False
+
+        dialog = OperationProgressDialog(
+            "Downloading AI Components", "Connecting…", parent=self, cancellable=True
+        )
+        worker = AIRuntimeInstallWorker(self)
+        state = {"ok": False, "error": None}
+
+        def on_progress(done: int, total: int, message: str) -> None:
+            dialog.set_status(f"{message} {done / 1e6:.0f} / {total / 1e6:.0f} MB" if total else message)
+            dialog.set_progress(done // 1024, max(1, total // 1024) if total else 0)
+
+        def on_ok() -> None:
+            state["ok"] = True
+            dialog.accept()
+
+        def on_failed(message: str) -> None:
+            state["error"] = message
+            dialog.reject()
+
+        worker.progress.connect(on_progress)
+        worker.finished_ok.connect(on_ok)
+        worker.failed.connect(on_failed)
+        worker.start()
+        if dialog.exec() != dialog.DialogCode.Accepted and worker.isRunning():
+            worker.requestInterruption()
+        worker.wait()
+        if state["ok"]:
+            self.status_label.setText("AI components installed.")
+            QTimer.singleShot(0, then)
+        elif state["error"]:
+            QMessageBox.critical(self, "Download failed", state["error"])
+        else:
+            self.status_label.setText("Download cancelled.")
+        return False
+
     def _generate_all_maps(self) -> None:
         albedo_source = self.source_images.get(MapType.ALBEDO)
         if albedo_source is None:
@@ -1377,6 +1435,8 @@ class MainWindow(QMainWindow):
             return
         if self.infer_thread is not None and self.infer_thread.isRunning():
             QMessageBox.information(self, "Busy", "Generation already running, please wait.")
+            return
+        if not self._ensure_ai_runtime(self._generate_all_maps):
             return
 
         self._generating_all = True
@@ -1507,6 +1567,8 @@ class MainWindow(QMainWindow):
                 "Height is generated from the Albedo source image — switch to "
                 "the Albedo tab and import an image first.",
             )
+            return
+        if not self._ensure_ai_runtime(self._generate_height_map):
             return
         if not self._is_model_ready_and_matched():
             if self.model_thread is not None and self.model_thread.isRunning():

@@ -333,3 +333,23 @@ class SingleImageSaveWorker(QThread):
             self.finished_ok.emit(self.path)
         except Exception as exc:
             self.failed.emit(str(exc))
+
+
+class AIRuntimeInstallWorker(QThread):
+    progress = pyqtSignal(int, int, str)
+    finished_ok = pyqtSignal()
+    failed = pyqtSignal(str)
+
+    def run(self) -> None:
+        from core import ai_runtime
+
+        try:
+            ai_runtime.install(
+                progress=lambda done, total, msg: self.progress.emit(done, total, msg),
+                cancelled=self.isInterruptionRequested,
+            )
+            self.finished_ok.emit()
+        except InterruptedError:
+            self.failed.emit("")
+        except Exception as exc:
+            self.failed.emit(str(exc))
