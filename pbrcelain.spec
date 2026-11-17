@@ -50,7 +50,11 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
-    excludes=["tkinter", "matplotlib", "IPython", "jupyter", "notebook", "pytest", "tensorflow", "jax", "flax"],
+    excludes=[
+        "tkinter", "matplotlib", "IPython", "jupyter", "notebook", "pytest", "tensorflow", "jax", "flax",
+        # Pulled in by transformers/diffusers but never needed by the depth models we ship.
+        "scipy", "pandas",
+    ],
     noarchive=False,
 )
 pyz = PYZ(a.pure)
