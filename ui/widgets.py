@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QEvent, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPainter, QPainterPath, QPalette, QPixmap
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 
@@ -170,3 +170,103 @@ class FoldArrow(QWidget):
         color = self.palette().color(QPalette.ColorRole.WindowText)
         paint_fold_arrow(painter, 0, 0, self.width(), self.height(), self._expanded, color)
         painter.end()
+
+
+class _Halo(QWidget):
+    """Paints a soft rounded glow; sits behind the widget it highlights."""
+
+    SPREAD = 16
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        from PyQt6.QtGui import QColor
+
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.color = QColor("#0a84ff")
+        self.strength = 0.0
+        self.radius = 9.0
+
+    def paintEvent(self, event) -> None:
+        from PyQt6.QtGui import QColor
+
+        if self.strength <= 0.0:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        steps = self.SPREAD
+        inner = QRectF(self.rect()).adjusted(steps, steps, -steps, -steps)
+        hole = QPainterPath()
+        hole.addRoundedRect(inner, self.radius, self.radius)
+        painter.setClipPath(self._outside(hole))
+        for i in range(steps, 0, -1):
+            k = 1.0 - i / (steps + 1)
+            color = QColor(self.color)
+            color.setAlphaF(min(1.0, self.strength * 0.16 * k * k))
+            painter.setBrush(color)
+            painter.drawRoundedRect(inner.adjusted(-i, -i, i, i), self.radius + i, self.radius + i)
+        painter.end()
+
+    def _outside(self, hole):
+        whole = QPainterPath()
+        whole.addRect(QRectF(self.rect()))
+        return whole.subtracted(hole)
+
+
+class PulseGlow:
+    """A soft glow that slowly breathes around a widget, used to point at the
+    next step (e.g. the Albedo slot of an empty project). The glow is painted
+    on `host` behind the widget so neighbouring layout margins do not clip it."""
+
+    def __init__(self, widget, color, host=None, period_ms: int = 1200):
+        from PyQt6.QtCore import QEasingCurve, QVariantAnimation
+
+        self._widget = widget
+        self._host = host or widget.parentWidget()
+        self._halo = _Halo(self._host)
+        self._halo.hide()
+        self.set_color(color)
+        self._running = False
+        self._anim = QVariantAnimation(widget)
+        self._anim.setStartValue(0.0)
+        self._anim.setKeyValueAt(0.5, 1.0)
+        self._anim.setEndValue(0.0)
+        self._anim.setDuration(period_ms)
+        self._anim.setEasingCurve(QEasingCurve.Type.InOutSine)
+        self._anim.setLoopCount(-1)
+        self._anim.valueChanged.connect(self._apply)
+
+    def set_color(self, color) -> None:
+        from PyQt6.QtGui import QColor
+
+        self._halo.color = QColor(color).lighter(130)
+        self._halo.update()
+
+    def is_running(self) -> bool:
+        return self._running
+
+    def start(self) -> None:
+        if self._running:
+            return
+        self._running = True
+        self._halo.show()
+        self._anim.start()
+
+    def stop(self) -> None:
+        if not self._running:
+            return
+        self._running = False
+        self._anim.stop()
+        self._halo.hide()
+
+    def _apply(self, value) -> None:
+        if not self._running:
+            return
+        from PyQt6.QtCore import QPoint, QRect
+
+        top_left = self._widget.mapTo(self._host, QPoint(0, 0))
+        spread = _Halo.SPREAD
+        self._halo.setGeometry(QRect(top_left, self._widget.size()).adjusted(-spread, -spread, spread, spread))
+        self._halo.stackUnder(self._widget) if self._widget.parentWidget() is self._host else self._halo.lower()
+        self._halo.strength = 0.35 + 0.65 * float(value)
+        self._halo.update()

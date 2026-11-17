@@ -61,7 +61,7 @@ from ui.tiled_preview_dialog import TiledPreviewDialog
 from ui.export_dialog import ExportDialog
 from ui.history import History, Snapshot
 from ui.icons import slot_icon, themed_icon
-from ui.widgets import IMAGE_EXTENSIONS, ImageLabel, SlotButton, ToggleHeading
+from ui.widgets import IMAGE_EXTENSIONS, ImageLabel, PulseGlow, SlotButton, ToggleHeading
 from ui.workers import (
     ExportWorker,
     InferenceWorker,
@@ -417,7 +417,7 @@ class MainWindow(QMainWindow):
         strip_layout.addWidget(self._build_material_header())
         slots_host = QWidget()
         slots_host.setLayout(self._slots_bar_layout)
-        self._slots_bar_layout.setContentsMargins(*pick(mac=(14, 2, 14, 10), windows=(16, 2, 16, 10), legacy=(10, 2, 10, 8)))
+        self._slots_bar_layout.setContentsMargins(*pick(mac=(14, 4, 14, 12), windows=(16, 4, 16, 12), legacy=(10, 4, 10, 10)))
         strip_layout.addWidget(slots_host)
         self._slot_strip = strip
         self._style_slot_strip()
@@ -597,6 +597,29 @@ class MainWindow(QMainWindow):
         row.addWidget(self.material_menu_btn, 0, Qt.AlignmentFlag.AlignVCenter)
         return header
 
+    def _update_next_step_pulse(self) -> None:
+        """An empty project points at the map to create first: the Albedo slot
+        breathes softly until an albedo image is imported."""
+        btn = self._slot_buttons.get(MapType.ALBEDO)
+        if btn is None:
+            return
+        if getattr(self, "_next_step_pulse", None) is None:
+            self._next_step_pulse = PulseGlow(btn, self._accent_qcolor(), host=self._slot_strip)
+            theme_changed.connect(lambda: self._next_step_pulse.set_color(self._accent_qcolor()))
+        if MapType.ALBEDO in self.source_images or self.generated_images:
+            self._next_step_pulse.stop()
+        else:
+            self._next_step_pulse.start()
+
+    def _accent_qcolor(self):
+        from PyQt6.QtGui import QColor
+
+        if PLATFORM_THEME == "mac":
+            from ui import mac_theme
+
+            return mac_theme.accent_color()
+        return self.palette().color(self.palette().ColorRole.Highlight) or QColor("#0a84ff")
+
     def _refresh_material_header(self) -> None:
         if not hasattr(self, "material_name_label"):
             return
@@ -645,6 +668,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_material_slots_bar(self) -> None:
         self._refresh_material_header()
+        self._update_next_step_pulse()
         for map_type, btn in self._slot_buttons.items():
             btn.setChecked(map_type == self.current_map_type)
             if map_type in self._draft_images:
