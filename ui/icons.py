@@ -64,3 +64,34 @@ def status_dot(color: str, filled: bool = True) -> QIcon:
     icon = QIcon(pixmap)
     icon.addPixmap(pixmap, QIcon.Mode.Normal, QIcon.State.On)
     return icon
+
+
+def slot_icon(name: str, status_color: str, filled: bool, size: int = 40) -> QIcon:
+    """Map-type glyph with a small status dot in its lower-right corner.
+    The checked (On) state uses the strong text colour, unchecked the dim one."""
+    with open(os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8") as f:
+        svg = f.read()
+    strong, dim = _colors()
+    icon = QIcon()
+    for color, state in ((dim, QIcon.State.Off), (strong, QIcon.State.On)):
+        glyph = QPixmap()
+        glyph.loadFromData(svg.replace("currentColor", color).encode("utf-8"), "SVG")
+        canvas = QPixmap(size, size)
+        canvas.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        painter.drawPixmap(0, 0, size, size, glyph)
+        dot = size * 0.30
+        x = y = size - dot - 0.5
+        painter.setBrush(QColor(0, 0, 0, 0))
+        if filled:
+            painter.setPen(QPen(QColor(0, 0, 0, 90), size * 0.05))
+            painter.setBrush(QColor(status_color))
+        else:
+            painter.setPen(QPen(QColor(status_color), size * 0.07))
+        painter.drawEllipse(int(x), int(y), int(dot), int(dot))
+        painter.end()
+        icon.addPixmap(canvas, QIcon.Mode.Normal, state)
+        icon.addPixmap(canvas, QIcon.Mode.Active, state)
+    return icon

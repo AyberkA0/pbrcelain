@@ -114,9 +114,9 @@ class AOPanel(GeneratePropertiesContainer):
         self.contrast_spin.valueChanged.connect(self.propertiesChanged.emit)
         page.add_param("Contrast curve", self.contrast_spin)
 
-        self.invert_checkbox = QCheckBox("Invert (Dark highlights)")
+        self.invert_checkbox = QCheckBox("Invert")
         self.invert_checkbox.stateChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Invert", self.invert_checkbox)
+        page.add_param("Direction", self.invert_checkbox)
 
         reset_btn = QPushButton("Reset to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QSettings, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QAbstractSpinBox,
     QCheckBox,
     QComboBox,
     QGridLayout,
@@ -15,7 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.theme import IS_MAC, PLATFORM_THEME, pick
-from ui.value_controls import attach_scrub, find_spin, slider_field, wants_slider
+from ui.value_controls import Knob, attach_scrub, find_spin, slider_field, wants_slider
 from ui.widgets import FoldArrow
 
 COLUMNS = 3
@@ -105,7 +106,9 @@ class PropertyPanel(QWidget):
         scroll.setWidget(content)
         outer.addWidget(scroll)
 
-    def add_param(self, label_text: str, widget: QWidget, wide: bool = False) -> QWidget:
+    def add_param(self, label_text: str, widget: QWidget, wide: bool = False, share_cell: bool = False) -> QWidget:
+        """`share_cell` places the parameter in the same grid cell as the previous
+        one, for alternatives of which only one is shown at a time."""
         inline = self._cursor is self._root
         container = QWidget()
         if inline:
@@ -117,14 +120,22 @@ class PropertyPanel(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         label = QLabel(label_text)
         label.setProperty("role", "dim")
+        if not inline:
+            label.setWordWrap(True)
         v.addWidget(label)
         spin = find_spin(widget)
         field = widget
         if spin is not None:
             attach_scrub(label, spin)
             if spin is widget and wants_slider(spin):
-                field = slider_field(spin, stacked=not inline)
-        v.addWidget(field, 1 if inline else 0)
+                field = slider_field(spin, stacked=False) if inline else Knob(spin, default=float(spin.value()))
+        if isinstance(field, Knob):
+            v.addWidget(field, 0, Qt.AlignmentFlag.AlignLeft)
+        else:
+            v.addWidget(field, 1 if inline else 0)
+        for spin_box in ([widget] if isinstance(widget, QAbstractSpinBox) else widget.findChildren(QAbstractSpinBox)):
+            if spin_box.isVisibleTo(widget) or spin_box is widget:
+                spin_box.setMinimumWidth(56)
         if PLATFORM_THEME != "legacy":
             combos = widget.findChildren(QComboBox)
             if isinstance(widget, QComboBox):
@@ -132,10 +143,15 @@ class PropertyPanel(QWidget):
             for combo in combos:
                 combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
                 combo.setMinimumContentsLength(4)
+                combo.setMinimumWidth(64)
         if wide or inline:
             self.add_wide(container)
             return container
         cur = self._cursor
+        if share_cell and (cur.row, cur.col) != (0, 0):
+            row, col = (cur.row, cur.col - 1) if cur.col > 0 else (cur.row - 1, COLUMNS - 1)
+            cur.grid.addWidget(container, row, col, Qt.AlignmentFlag.AlignTop)
+            return container
         cur.grid.addWidget(container, cur.row, cur.col, Qt.AlignmentFlag.AlignTop)
         cur.col += 1
         if cur.col >= COLUMNS:

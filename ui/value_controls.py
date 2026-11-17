@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QEvent, QObject, Qt
+from PyQt6.QtCore import QEvent, QObject, QPointF, Qt
 from PyQt6.QtWidgets import (
     QAbstractScrollArea,
     QAbstractSpinBox,
@@ -36,10 +36,16 @@ class _WheelGuard(QObject):
             if obj.focusPolicy() == Qt.FocusPolicy.WheelFocus:
                 obj.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
             return False
+        if event.type() == QEvent.Type.ShortcutOverride and _is_history_key(event):
+            parent = obj.parentWidget() if isinstance(obj, QWidget) else None
+            if isinstance(obj, QAbstractSpinBox) or isinstance(parent, QAbstractSpinBox):
+                event.ignore()
+                return True
+            return False
         if event.type() != QEvent.Type.Wheel:
             return False
         target = obj
-        while target is not None and not isinstance(target, (QAbstractSpinBox, QComboBox, QSlider)):
+        while target is not None and not isinstance(target, (QAbstractSpinBox, QComboBox, QSlider, Knob)):
             if isinstance(target, QAbstractScrollArea):
                 return False
             target = target.parentWidget() if isinstance(target, QWidget) else None
@@ -51,6 +57,14 @@ class _WheelGuard(QObject):
         if parent is not None:
             QApplication.sendEvent(parent.viewport(), event.clone())
         return True
+
+
+def _is_history_key(event) -> bool:
+    from PyQt6.QtGui import QKeySequence
+
+    if event.matches(QKeySequence.StandardKey.Undo) or event.matches(QKeySequence.StandardKey.Redo):
+        return True
+    return event.key() == Qt.Key.Key_Y and bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
 
 
 _guard: _WheelGuard | None = None
@@ -202,3 +216,134 @@ def find_spin(widget: QWidget) -> QAbstractSpinBox | None:
         return widget
     spins = widget.findChildren(QAbstractSpinBox)
     return spins[0] if len(spins) == 1 else None
+
+
+class Knob(QWidget):
+    """A rotary control in the style of a mixer knob, bound to a spin box.
+
+    Drag up/right to turn it clockwise, down/left to turn it back (Option: fine,
+    Shift: coarse). The mouse wheel works once the knob has focus, and a
+    double-click restores `default`. The spin box stays the single source of
+    truth; it is kept inside the knob, hidden.
+    """
+
+    _SWEEP = 270.0
+
+    def __init__(self, spin: QAbstractSpinBox, default: float, diameter: int = 46, parent=None):
+        super().__init__(parent)
+        self._spin = spin
+        self._default = default
+        self._drag_origin = None
+        self._drag_value = 0.0
+        spin.setParent(self)
+        spin.hide()
+        spin.valueChanged.connect(self.update)
+        spin.installEventFilter(self)
+        self._diameter = diameter
+        self.setFixedSize(diameter + 6, diameter + 18)
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.setCursor(Qt.CursorShape.SizeVerCursor)
+        tip = spin.toolTip()
+        hint = "Drag up/down to turn (Option: fine, Shift: coarse). Double-click to reset."
+        self.setToolTip(f"{tip}\n\n{hint}" if tip else hint)
+        self.setEnabled(spin.isEnabled())
+
+    def _fraction(self) -> float:
+        lo, hi = self._spin.minimum(), self._spin.maximum()
+        return 0.0 if hi <= lo else (float(self._spin.value()) - lo) / (hi - lo)
+
+    def _per_pixel(self, modifiers) -> float:
+        per_px = (self._spin.maximum() - self._spin.minimum()) / 200.0
+        if modifiers & Qt.KeyboardModifier.ShiftModifier:
+            per_px *= 4.0
+        if modifiers & Qt.KeyboardModifier.AltModifier:
+            per_px *= 0.1
+        return per_px
+
+    def eventFilter(self, obj, event) -> bool:
+        if obj is self._spin and event.type() == QEvent.Type.EnabledChange:
+            self.setEnabled(self._spin.isEnabled())
+            self.update()
+        return False
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_origin = event.position()
+            self._drag_value = float(self._spin.value())
+            self.setFocus(Qt.FocusReason.MouseFocusReason)
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._drag_origin is None:
+            return
+        delta = event.position() - self._drag_origin
+        travel = (-delta.y()) + delta.x()
+        self._spin.setValue(self._drag_value + travel * self._per_pixel(event.modifiers()))
+
+    def mouseReleaseEvent(self, event) -> None:
+        self._drag_origin = None
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        self._spin.setValue(self._default)
+
+    def wheelEvent(self, event) -> None:
+        steps = event.angleDelta().y() / 120.0
+        self._spin.setValue(float(self._spin.value()) + steps * self._spin.singleStep())
+
+    def paintEvent(self, event) -> None:
+        from PyQt6.QtCore import QRectF
+        from PyQt6.QtGui import QColor, QPainter, QPalette, QPen
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pal = self.palette()
+        enabled = self.isEnabled()
+        text = pal.color(QPalette.ColorRole.WindowText)
+        accent = pal.color(QPalette.ColorRole.Highlight) if enabled else text
+        track = QColor(text)
+        track.setAlphaF(0.16)
+        if not enabled:
+            accent = QColor(text)
+            accent.setAlphaF(0.35)
+
+        side = self._diameter
+        rect = QRectF(3, 3, side, side)
+        start = 225.0
+        span = -self._SWEEP
+
+        pen = QPen(track, 4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        painter.drawArc(rect, int(start * 16), int(span * 16))
+        pen.setColor(accent)
+        painter.setPen(pen)
+        painter.drawArc(rect, int(start * 16), int(span * self._fraction() * 16))
+
+        body = rect.adjusted(8, 8, -8, -8)
+        fill = QColor(text)
+        fill.setAlphaF(0.10 if enabled else 0.05)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(fill)
+        painter.drawEllipse(body)
+
+        import math
+
+        angle = math.radians(start + span * self._fraction())
+        cx, cy = body.center().x(), body.center().y()
+        r_out = body.width() / 2 - 3
+        r_in = r_out * 0.45
+        mark = QColor(text)
+        if not enabled:
+            mark.setAlphaF(0.4)
+        painter.setPen(QPen(mark, 2.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.drawLine(
+            QPointF(cx + r_in * math.cos(angle), cy - r_in * math.sin(angle)),
+            QPointF(cx + r_out * math.cos(angle), cy - r_out * math.sin(angle)),
+        )
+
+        painter.setPen(mark)
+        font = painter.font()
+        font.setPointSizeF(max(8.0, font.pointSizeF() - 2))
+        painter.setFont(font)
+        value_text = self._spin.textFromValue(self._spin.value()) + self._spin.suffix()
+        bottom = QRectF(rect.center().x() - self.width() / 2, rect.bottom() - 2, self.width(), 16)
+        painter.drawText(bottom, Qt.AlignmentFlag.AlignCenter, value_text)
+        painter.end()

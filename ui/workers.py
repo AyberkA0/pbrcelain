@@ -79,6 +79,21 @@ class InferenceWorker(QThread):
             self.failed.emit(str(exc))
 
 
+def _scale_pixels(options, scale: float, *fields: str):
+    """Draft previews run on a downscaled copy; pixel-sized settings must shrink
+    with it or the draft looks blurrier/broader than the full-size result."""
+    if options is None or scale >= 0.999:
+        return options
+    from dataclasses import replace
+
+    changes = {}
+    for name in fields:
+        value = getattr(options, name, None)
+        if isinstance(value, (int, float)) and value > 0:
+            changes[name] = max(1, int(round(value * scale)))
+    return replace(options, **changes) if changes else options
+
+
 class PropertiesPreviewWorker(QThread):
     result_ready = pyqtSignal(int, str, object)
     failed = pyqtSignal(int, str)
@@ -138,6 +153,10 @@ class PropertiesPreviewWorker(QThread):
             return downsample_for_preview(np.asarray(image, dtype=np.float32).clip(0.0, 1.0))
         return PropertiesPreviewWorker._image_array(image, "L")
 
+    def _scale_downstream(self, scale: float) -> None:
+        self.normal_options = _scale_pixels(self.normal_options, scale, "pre_blur_radius")
+        self.ao_options = _scale_pixels(self.ao_options, scale, "blur_radius")
+
     def run(self) -> None:
         try:
             images: dict[str, Image.Image] = {}
@@ -160,9 +179,11 @@ class PropertiesPreviewWorker(QThread):
                     return
                 guide_down = downsample_for_preview(self.height_guide) if self.height_guide is not None else None
                 depth_down = downsample_for_preview(self.height_depth)
-                height_arr = build_height_map(depth_down, self.height_options, guide=guide_down)
+                scale = depth_down.shape[1] / self.height_depth.shape[1]
+                self._scale_downstream(scale)
+                height_options = _scale_pixels(self.height_options, scale, "blur_radius")
+                height_arr = build_height_map(depth_down, height_options, guide=guide_down)
                 if self.height_seamless_orig_size is not None:
-                    scale = depth_down.shape[1] / self.height_depth.shape[1]
                     ow, oh = self.height_seamless_orig_size
                     small_size = (max(1, int(round(ow * scale))), max(1, int(round(oh * scale))))
                     _, height_arr, _ = apply_seamless_linear_mask(height_arr, orig_size=small_size, padding_pct=0.10)
@@ -174,6 +195,7 @@ class PropertiesPreviewWorker(QThread):
                 if self.height_image is None:
                     return
                 height_arr = self._height_array(self.height_image)
+                self._scale_downstream(height_arr.shape[1] / self.height_image.width)
                 normal_arr = generate_normal_map(height_arr, self.normal_options)
                 images["normal"] = normal_map_to_image(normal_arr)
             elif self.map_type == "roughness":
@@ -185,6 +207,7 @@ class PropertiesPreviewWorker(QThread):
                     return
                 from core.ao_map import generate_ao_map, to_image as ao_to_image
                 height_arr = self._height_array(self.height_image)
+                self._scale_downstream(height_arr.shape[1] / self.height_image.width)
                 ao_arr = generate_ao_map(height_arr, self.ao_options)
                 images["ao"] = ao_to_image(ao_arr, bit_depth=8)
 

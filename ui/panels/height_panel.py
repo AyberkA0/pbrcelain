@@ -27,6 +27,7 @@ from ui.curve_editor import CurveEditorDialog
 from ui.panels.base import GeneratePropertiesContainer
 import sys
 
+from ui.value_controls import Knob
 from ui.theme import legacy_style
 
 def _build_device_map() -> dict[str, str]:
@@ -298,9 +299,10 @@ class HeightPanel(GeneratePropertiesContainer):
 
         self.edit_curve_btn = QPushButton("Edit Curve…")
         self.edit_curve_btn.clicked.connect(self._open_curve_editor)
-        self._edit_curve_field = page.add_param("Bowl correction", self.edit_curve_btn)
+        self._edit_curve_field = page.add_param("Bowl correction", self.edit_curve_btn, share_cell=True)
 
-        self.invert_checkbox = QCheckBox("Invert (near ↔ far)")
+        self.invert_checkbox = QCheckBox("Invert")
+        self.invert_checkbox.setToolTip("Swap near and far: raised areas become recessed and vice versa.")
         self.invert_checkbox.stateChanged.connect(self.propertiesChanged.emit)
         page.add_param("Direction", self.invert_checkbox)
 
@@ -361,14 +363,16 @@ class HeightPanel(GeneratePropertiesContainer):
         self.low_pct_spin.setSingleStep(0.5)
         self.low_pct_spin.setValue(1.0)
         self.low_pct_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Clip low %", self.low_pct_spin)
+        self.low_pct_spin.setSuffix(" %")
+        page.add_param("Clip low", Knob(self.low_pct_spin, default=1.0))
 
         self.high_pct_spin = QDoubleSpinBox()
         self.high_pct_spin.setRange(51.0, 100.0)
         self.high_pct_spin.setSingleStep(0.5)
         self.high_pct_spin.setValue(99.0)
         self.high_pct_spin.valueChanged.connect(self.propertiesChanged.emit)
-        page.add_param("Clip high %", self.high_pct_spin)
+        self.high_pct_spin.setSuffix(" %")
+        page.add_param("Clip high", Knob(self.high_pct_spin, default=99.0))
 
         reset_btn = QPushButton("Reset to Defaults")
         reset_btn.clicked.connect(self.reset_to_defaults)

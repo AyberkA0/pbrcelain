@@ -59,7 +59,8 @@ from ui import mac_window, window_layout
 from ui.theme import IS_MAC, IS_WINDOWS, PLATFORM_THEME, legacy_style, pick, theme_changed
 from ui.tiled_preview_dialog import TiledPreviewDialog
 from ui.export_dialog import ExportDialog
-from ui.icons import status_dot, themed_icon
+from ui.history import History, Snapshot
+from ui.icons import slot_icon, themed_icon
 from ui.widgets import IMAGE_EXTENSIONS, ImageLabel, SlotButton, ToggleHeading
 from ui.workers import (
     ExportWorker,
@@ -113,6 +114,7 @@ def _heading(text: str) -> str:
 
 _VIEW_OPTIONS_EXPANDED_KEY = "window/viewOptionsExpanded"
 _VIEW_OPTIONS_MARGIN = 12
+_MATERIAL_THUMB = 38
 _VIEW_OPTIONS_HEIGHT = 300
 _VIEW_OPTIONS_WIDTH = 684
 _VIEW_OPTIONS_MAX_WIDTH = 684
@@ -159,11 +161,86 @@ class MainWindow(QMainWindow):
 
         self._slot_buttons: dict[MapType, QPushButton] = {}
 
+        self._history = History(self._capture_state, self._restore_state, self)
         self._build_toolbar()
+        self._build_history_actions()
         self._build_ui()
         self._update_window_title()
         self._reset_properties_snapshots()
         self._select_map_type(MapType.ALBEDO)
+        for panel in self._panels_by_type.values():
+            panel.propertiesChanged.connect(self._history.touch)
+        self._history.reset()
+
+    def _build_history_actions(self) -> None:
+        self.undo_action = QAction("Undo", self)
+        self.undo_action.setShortcuts([QKeySequence(QKeySequence.StandardKey.Undo)])
+        self.undo_action.triggered.connect(self._undo)
+        self.redo_action = QAction("Redo", self)
+        self.redo_action.setShortcuts([QKeySequence("Ctrl+Y"), QKeySequence(QKeySequence.StandardKey.Redo)])
+        self.redo_action.triggered.connect(self._redo)
+        for action in (self.undo_action, self.redo_action):
+            action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+            self.addAction(action)
+        if PLATFORM_THEME == "mac":
+            edit_menu = self.menuBar().addMenu("Edit")
+            edit_menu.addAction(self.undo_action)
+            edit_menu.addAction(self.redo_action)
+        self._history.changed.connect(self._update_history_actions)
+        self._update_history_actions()
+
+    def _update_history_actions(self) -> None:
+        self.undo_action.setEnabled(self._history.can_undo())
+        self.redo_action.setEnabled(self._history.can_redo())
+
+    def _is_busy(self) -> bool:
+        return any(
+            t is not None and t.isRunning()
+            for t in (self.infer_thread, self.model_thread)
+        )
+
+    def _capture_state(self) -> Optional[Snapshot]:
+        if self._is_busy():
+            return None
+        return Snapshot(
+            source_images=dict(self.source_images),
+            generated_images=dict(self.generated_images),
+            height_depth=self._height_depth_result,
+            panels={mt: panel.to_options_dict() for mt, panel in self._panels_by_type.items()},
+            saved={mt: dict(v) for mt, v in self._properties_snapshot.items()},
+            current_map=self.current_map_type,
+        )
+
+    def _restore_state(self, snap: Snapshot) -> None:
+        self._invalidate_properties_preview()
+        self.source_images = dict(snap.source_images)
+        self.generated_images = dict(snap.generated_images)
+        self._draft_images.clear()
+        self._height_depth_result = snap.height_depth
+        for mt, panel in self._panels_by_type.items():
+            panel.apply_options_dict(snap.panels.get(mt, {}))
+        self._properties_snapshot = {mt: dict(v) for mt, v in snap.saved.items()}
+        self._invalidate_properties_preview()
+        self._mark_dirty()
+        self._select_map_type(self.current_map_type)
+        self._push_textures_to_preview()
+        self._update_save_revert_enabled()
+        panel = self._panels_by_type[self.current_map_type]
+        if panel.properties_to_dict() != self._properties_snapshot.get(self.current_map_type, {}):
+            self._schedule_properties_preview()
+
+    def _undo(self) -> None:
+        if self._is_busy():
+            self.status_label.setText("Wait for the current job to finish before undoing.")
+            return
+        if self._history.undo():
+            self.status_label.setText("Undone.")
+
+    def _redo(self) -> None:
+        if self._is_busy():
+            return
+        if self._history.redo():
+            self.status_label.setText("Redone.")
 
     def _build_toolbar(self) -> None:
         if PLATFORM_THEME == "mac":
@@ -305,7 +382,7 @@ class MainWindow(QMainWindow):
             splitter.setSizes([400, 1040])
         else:
             splitter.setChildrenCollapsible(False)
-            splitter.widget(0).setMinimumWidth(pick(mac=440, windows=420))
+            splitter.widget(0).setMinimumWidth(pick(mac=340, windows=340))
             splitter.setSizes([520, 920])
 
     def _build_project_section(self) -> QWidget:
@@ -337,9 +414,10 @@ class MainWindow(QMainWindow):
         strip_layout = QVBoxLayout(strip)
         strip_layout.setContentsMargins(0, 0, 0, 0)
         strip_layout.setSpacing(0)
+        strip_layout.addWidget(self._build_material_header())
         slots_host = QWidget()
         slots_host.setLayout(self._slots_bar_layout)
-        self._slots_bar_layout.setContentsMargins(*pick(mac=(14, 10, 14, 10), windows=(16, 12, 16, 10), legacy=(10, 8, 10, 8)))
+        self._slots_bar_layout.setContentsMargins(*pick(mac=(14, 2, 14, 10), windows=(16, 2, 16, 10), legacy=(10, 2, 10, 8)))
         strip_layout.addWidget(slots_host)
         self._slot_strip = strip
         self._style_slot_strip()
@@ -373,8 +451,8 @@ class MainWindow(QMainWindow):
             btn = SlotButton()
             btn.setProperty("role", "slot-btn")
             btn.setCheckable(True)
-            btn.setText(MAP_TYPE_LABELS[map_type])
-            btn.setIconSize(QSize(9, 9))
+            btn.setAccessibleName(MAP_TYPE_LABELS[map_type])
+            btn.setIconSize(QSize(20, 20))
             btn.clicked.connect(lambda _checked=False, mt=map_type: self._select_map_type(mt))
             btn.doubleClicked.connect(lambda mt=map_type: (self._select_map_type(mt), self._open_tiled_preview(mt)))
             self._slot_buttons[map_type] = btn
@@ -424,6 +502,7 @@ class MainWindow(QMainWindow):
             actions_col.addWidget(btn, 0, Qt.AlignmentFlag.AlignLeft)
         self._refresh_slot_action_icons()
         theme_changed.connect(self._refresh_slot_action_icons)
+        theme_changed.connect(self._refresh_material_slots_bar)
 
         controls.addWidget(self.active_slot_label)
         controls.addWidget(self.slot_info_label)
@@ -469,7 +548,103 @@ class MainWindow(QMainWindow):
             state = "Loaded"
         self.slot_info_label.setText(f"{state}\n{image.width} \u00d7 {image.height} px")
 
+    def _build_material_header(self) -> QWidget:
+        header = QWidget()
+        header.setObjectName("MaterialHeader")
+        row = QHBoxLayout(header)
+        row.setContentsMargins(*pick(mac=(14, 10, 10, 8), windows=(16, 10, 12, 8), legacy=(10, 8, 8, 6)))
+        row.setSpacing(10)
+
+        self.material_thumb = QLabel()
+        self.material_thumb.setFixedSize(_MATERIAL_THUMB, _MATERIAL_THUMB)
+        row.addWidget(self.material_thumb)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(1)
+        self.material_name_label = QLabel("")
+        self.material_name_label.setProperty("role", "slot-title")
+        self.material_info_label = QLabel("")
+        self.material_info_label.setProperty("role", "dim")
+        text_col.addStretch(1)
+        text_col.addWidget(self.material_name_label)
+        text_col.addWidget(self.material_info_label)
+        text_col.addStretch(1)
+        row.addLayout(text_col, 1)
+
+        menu = QMenu(self)
+        for text, handler in (
+            ("New Project", self._new_project),
+            ("Open Project…", self._open_project),
+            (None, None),
+            ("Save", self._save_project),
+            ("Save As…", self._save_project_as),
+            (None, None),
+            ("Export Maps…", self._export_maps),
+        ):
+            if text is None:
+                menu.addSeparator()
+            else:
+                menu.addAction(text, handler)
+        self.material_menu_btn = QToolButton()
+        self.material_menu_btn.setToolTip("Project actions")
+        self.material_menu_btn.setAutoRaise(True)
+        self.material_menu_btn.setIconSize(QSize(16, 16))
+        self.material_menu_btn.setMenu(menu)
+        self.material_menu_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.material_menu_btn.setStyleSheet("QToolButton::menu-indicator { image: none; width: 0px; }")
+        self.material_menu_btn.setIcon(themed_icon("more"))
+        theme_changed.connect(lambda: self.material_menu_btn.setIcon(themed_icon("more")))
+        row.addWidget(self.material_menu_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+        return header
+
+    def _refresh_material_header(self) -> None:
+        if not hasattr(self, "material_name_label"):
+            return
+        name = os.path.splitext(os.path.basename(self.project_path))[0] if self.project_path else "Untitled"
+        self.material_name_label.setText(f"{name} \u2014 Edited" if self.dirty and not IS_MAC else name)
+        maps = [mt for mt in MAP_TYPE_ORDER if self._active_display_image(mt) is not None]
+        info = f"{len(maps)} of {len(MAP_TYPE_ORDER)} maps"
+        albedo = self._active_display_image(MapType.ALBEDO)
+        if albedo is not None:
+            info += f" \u00b7 {albedo.width} \u00d7 {albedo.height}"
+        self.material_info_label.setText(info)
+        self.material_thumb.setPixmap(self._material_thumb_pixmap(albedo))
+
+    def _material_thumb_pixmap(self, albedo: Optional[Image.Image]) -> QPixmap:
+        from PyQt6.QtGui import QBrush, QColor, QPainter, QPainterPath
+
+        ratio = self.devicePixelRatioF()
+        size = int(_MATERIAL_THUMB * ratio)
+        out = QPixmap(size, size)
+        out.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(out)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addEllipse(1, 1, size - 2, size - 2)
+        if albedo is not None:
+            thumb = albedo.convert("RGB").copy()
+            thumb.thumbnail((size * 2, size * 2))
+            pix = pil_to_qpixmap(thumb).scaled(
+                size, size, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation
+            )
+            painter.setClipPath(path)
+            painter.drawPixmap(0, 0, pix)
+            painter.setClipping(False)
+        else:
+            color = self.palette().color(self.foregroundRole())
+            color.setAlphaF(0.12)
+            painter.fillPath(path, QBrush(color))
+        edge = self.palette().color(self.foregroundRole())
+        edge.setAlphaF(0.18)
+        painter.setPen(edge)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(path)
+        painter.end()
+        out.setDevicePixelRatio(ratio)
+        return out
+
     def _refresh_material_slots_bar(self) -> None:
+        self._refresh_material_header()
         for map_type, btn in self._slot_buttons.items():
             btn.setChecked(map_type == self.current_map_type)
             if map_type in self._draft_images:
@@ -480,7 +655,7 @@ class MainWindow(QMainWindow):
                 state, color, filled = "Loaded", "#3b82f6", True
             else:
                 state, color, filled = "Empty", "#8e8e93", False
-            btn.setIcon(status_dot(color, filled))
+            btn.setIcon(slot_icon(f"map-{map_type.value}", color, filled))
             btn.setToolTip(
                 f"<b>{MAP_TYPE_LABELS[map_type]}</b> \u2014 {state}<br>"
                 "Click to select, double-click to open the 2x2 tiled preview."
@@ -560,12 +735,6 @@ class MainWindow(QMainWindow):
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.setSpacing(0)
 
-        viewport_heading = QLabel(_heading("3D VIEWPORT"))
-        viewport_heading.setProperty("role", "viewport-label")
-        if IS_MAC:
-            viewport_heading.setFixedHeight(mac_window.TITLE_BAR_HEIGHT)
-            mac_window.install_drag_area(viewport_heading)
-        top_layout.addWidget(viewport_heading)
 
         self.preview_3d = Preview3DWidget()
         self.preview_3d.setMinimumHeight(160)
@@ -584,6 +753,17 @@ class MainWindow(QMainWindow):
         panel_layout.setSpacing(0)
         self._view_options_panel = panel
         self._viewport_frame = viewport
+
+        # The title bar strip over the viewport is invisible but still drags
+        # the window, like the strip above the material slots.
+        self._viewport_title_drag = None
+        if IS_MAC:
+            drag = QWidget(viewport)
+            drag.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+            drag.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            drag.setFixedHeight(mac_window.TITLE_BAR_HEIGHT)
+            mac_window.install_drag_area(drag)
+            self._viewport_title_drag = drag
 
         preview_heading = ToggleHeading(_heading("VIEW OPTIONS"))
         preview_heading.setProperty("role", "panel-heading")
@@ -637,6 +817,9 @@ class MainWindow(QMainWindow):
 
     def _layout_view_options_panel(self) -> None:
         panel, viewport = self._view_options_panel, self._viewport_frame
+        if self._viewport_title_drag is not None:
+            self._viewport_title_drag.setGeometry(0, 0, viewport.width(), mac_window.TITLE_BAR_HEIGHT)
+            self._viewport_title_drag.raise_()
         margin = _VIEW_OPTIONS_MARGIN
         max_width = max(120, viewport.width() - 2 * margin)
         max_height = max(40, viewport.height() - 2 * margin)
@@ -674,7 +857,7 @@ class MainWindow(QMainWindow):
         if not window_layout.restore(self, self._main_splitter, self._preview_splitter):
             window_layout.fit_to_screen(
                 self, self._main_splitter, self._preview_splitter,
-                sidebar_ratio=pick(mac=0.34, windows=0.32), sidebar_min=pick(mac=440, windows=420), sidebar_max=640,
+                sidebar_ratio=pick(mac=0.34, windows=0.32), sidebar_min=pick(mac=380, windows=380), sidebar_max=640,
             )
         if QSettings().value(_VIEW_OPTIONS_EXPANDED_KEY, True, type=bool) is False:
             self._view_options_heading.set_expanded(False)
@@ -1662,8 +1845,11 @@ class MainWindow(QMainWindow):
     def _mark_dirty(self) -> None:
         self.dirty = True
         self._update_window_title()
+        if hasattr(self, "_history"):
+            self._history.touch()
 
     def _update_window_title(self) -> None:
+        self._refresh_material_header()
         if IS_MAC:
             self.setWindowTitle("[*]")
             self.setWindowModified(self.dirty)
@@ -1707,6 +1893,7 @@ class MainWindow(QMainWindow):
         self._select_map_type(MapType.ALBEDO)
         self._push_textures_to_preview()
         self._update_window_title()
+        self._history.reset()
 
     def _open_project(self) -> None:
         if not self._confirm_discard_if_dirty():
@@ -1767,6 +1954,7 @@ class MainWindow(QMainWindow):
         self._select_map_type(MapType.ALBEDO)
         self._push_textures_to_preview()
         self._update_window_title()
+        self._history.reset()
         self.status_label.setText(f"Project loaded from {fname}")
 
     def _collect_project_data(self) -> ProjectData:
