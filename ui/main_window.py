@@ -156,6 +156,7 @@ _GENERATE_SOURCE = {
 }
 
 SIDEBAR_START_WIDTH = 370
+_TITLE_ICONS_LEFT = 78  # first title icon, right of the macOS window buttons
 MAP_WELL_HEIGHT = 150
 
 RECENT_PROJECTS_KEY = "recentProjects"
@@ -254,6 +255,35 @@ class MainWindow(QMainWindow):
         for btn, icon in getattr(self, "_title_buttons", []):
             btn.setIcon(subtle_icon(icon))
 
+    def _style_title_pill(self, floating: bool | None = None) -> None:
+        pill = getattr(self, "_title_pill", None)
+        if pill is None:
+            return
+        if floating is None:
+            splitter = getattr(self, "_main_splitter", None)
+            sidebar = splitter.widget(0) if splitter is not None else None
+            floating = sidebar is not None and sidebar.isHidden()
+        # Floating, the pill fills the window's top-left corner, under the macOS
+        # window buttons; the icons keep their place. Docked, it is invisible.
+        title_row = pill.parentWidget().layout()
+        if floating:
+            title_row.setContentsMargins(0, 0, 14, 0)
+            pill.layout().setContentsMargins(_TITLE_ICONS_LEFT, 0, 6, 0)
+            pill.setMinimumHeight(mac_window.TITLE_BAR_HEIGHT)
+        else:
+            title_row.setContentsMargins(_TITLE_ICONS_LEFT, 0, 14, 1)
+            pill.layout().setContentsMargins(0, 0, 0, 0)
+            pill.setMinimumHeight(0)
+        if floating:
+            background, edge = self._floating_surface()
+            pill.setStyleSheet(
+                f"QFrame#TitleIconPill {{ background-color: {background};"
+                f" border: none; border-right: 1px solid {edge}; border-bottom: 1px solid {edge};"
+                " border-bottom-right-radius: 10px; }"
+            )
+        else:
+            pill.setStyleSheet("QFrame#TitleIconPill { background: transparent; border: none; }")
+
     def _toggle_sidebar(self) -> None:
         """Hide the sidebar completely, or bring it back at its previous width.
         While it is hidden the title bar (window buttons, sidebar, back and
@@ -272,10 +302,12 @@ class MainWindow(QMainWindow):
                 title.setGeometry(0, 0, title.sizeHint().width(), title.height())
                 title.show()
                 title.raise_()
+            self._style_title_pill()
         else:
             if title is not None:
                 title.setStyleSheet("")
                 self._project_section_layout.insertWidget(0, title)
+            self._style_title_pill(floating=False)
             sidebar.show()
             width = getattr(self, "_sidebar_width_before_hide", SIDEBAR_START_WIDTH)
             splitter.setSizes([width, max(0, total - width)])
@@ -495,8 +527,18 @@ class MainWindow(QMainWindow):
             title_space.setFixedHeight(mac_window.TITLE_BAR_HEIGHT)
             mac_window.install_drag_area(title_space)
             title_row = QHBoxLayout(title_space)
-            title_row.setContentsMargins(78, 0, 14, 1)
-            title_row.setSpacing(4)
+            title_row.setContentsMargins(_TITLE_ICONS_LEFT, 0, 14, 1)
+            title_row.setSpacing(0)
+            # The buttons sit in a pill that is invisible while the sidebar is
+            # shown and gets the floating-panel background when it is hidden.
+            pill = QFrame()
+            pill.setObjectName("TitleIconPill")
+            pill.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            pill_row = QHBoxLayout(pill)
+            pill_row.setSpacing(4)
+            title_row.addWidget(pill, 0, Qt.AlignmentFlag.AlignVCenter)
+            self._title_pill = pill
+            self._style_title_pill()
             self._title_buttons = []
             for icon, tip, slot in (
                 ("sidebar", "Show or hide the sidebar", self._toggle_sidebar),
@@ -514,7 +556,7 @@ class MainWindow(QMainWindow):
                     " QToolButton:hover { background-color: rgba(127, 127, 127, 0.22); }"
                 )
                 btn.clicked.connect(slot)
-                title_row.addWidget(btn)
+                pill_row.addWidget(btn)
                 self._title_buttons.append((btn, icon))
             if len(self._title_buttons) == 3:
                 self._title_back_btn = self._title_buttons[1][0]
@@ -522,6 +564,7 @@ class MainWindow(QMainWindow):
             title_row.addStretch(1)
             self._refresh_title_icons()
             theme_changed.connect(self._refresh_title_icons)
+            theme_changed.connect(self._style_title_pill)
             layout.addWidget(title_space)
             self._title_space = title_space
             self._project_section_layout = layout
@@ -965,7 +1008,9 @@ class MainWindow(QMainWindow):
         self._preview_splitter = splitter
         return splitter
 
-    def _style_view_options_panel(self) -> None:
+    @staticmethod
+    def _floating_surface() -> tuple[str, str]:
+        """Background and border of widgets that float over the 3D view."""
         if PLATFORM_THEME == "mac":
             from ui import mac_theme
 
@@ -977,10 +1022,15 @@ class MainWindow(QMainWindow):
         else:
             base, dark = "#2b2b2b", True
         color = QColor(base)
+        background = f"rgba({color.red()}, {color.green()}, {color.blue()}, 0.93)"
         edge = "rgba(255, 255, 255, 0.14)" if dark else "rgba(0, 0, 0, 0.16)"
+        return background, edge
+
+    def _style_view_options_panel(self) -> None:
+        background, edge = self._floating_surface()
         self._view_options_panel.setStyleSheet(
             "QFrame#FloatingViewOptions {"
-            f" background-color: rgba({color.red()}, {color.green()}, {color.blue()}, 0.93);"
+            f" background-color: {background};"
             f" border: 1px solid {edge}; border-radius: 10px; }}"
             " QFrame#FloatingViewOptions QScrollArea, QFrame#FloatingViewOptions QScrollArea > QWidget > QWidget"
             " { background: transparent; }"
