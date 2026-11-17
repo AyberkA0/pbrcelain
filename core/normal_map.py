@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import cv2
 import numpy as np
 from PIL import Image
+from core.imgops import gaussian_blur, resize, sobel
 
 
 @dataclass
@@ -47,30 +47,30 @@ def generate_normal_map(height: np.ndarray, options: NormalMapOptions | None = N
 
     if options.pre_blur_radius > 0:
         k = options.pre_blur_radius * 2 + 1
-        working = cv2.GaussianBlur(working, (k, k), 0)
+        working = gaussian_blur(working, k)
 
     scale = options.strength * (max(h, w) / _REFERENCE_DIM)
 
     if options.multi_frequency:
         k_macro = _macro_kernel(h, w)
-        h_macro = cv2.GaussianBlur(working, (k_macro, k_macro), 0)
-        gx_macro = cv2.Sobel(h_macro, cv2.CV_32F, 1, 0, ksize=3) * scale * options.macro_strength
-        gy_macro = cv2.Sobel(h_macro, cv2.CV_32F, 0, 1, ksize=3) * scale * options.macro_strength
+        h_macro = gaussian_blur(working, k_macro)
+        gx_macro = sobel(h_macro, 1, 0) * scale * options.macro_strength
+        gy_macro = sobel(h_macro, 0, 1) * scale * options.macro_strength
 
         k_med = _medium_kernel(h, w)
-        h_med = cv2.GaussianBlur(working, (k_med, k_med), 0)
-        gx_med = cv2.Sobel(h_med - h_macro, cv2.CV_32F, 1, 0, ksize=3) * scale * options.medium_strength
-        gy_med = cv2.Sobel(h_med - h_macro, cv2.CV_32F, 0, 1, ksize=3) * scale * options.medium_strength
+        h_med = gaussian_blur(working, k_med)
+        gx_med = sobel(h_med - h_macro, 1, 0) * scale * options.medium_strength
+        gy_med = sobel(h_med - h_macro, 0, 1) * scale * options.medium_strength
 
         h_micro = working - h_med
-        gx_micro = cv2.Sobel(h_micro, cv2.CV_32F, 1, 0, ksize=3) * scale * options.micro_strength
-        gy_micro = cv2.Sobel(h_micro, cv2.CV_32F, 0, 1, ksize=3) * scale * options.micro_strength
+        gx_micro = sobel(h_micro, 1, 0) * scale * options.micro_strength
+        gy_micro = sobel(h_micro, 0, 1) * scale * options.micro_strength
 
         gx = gx_macro + gx_med + gx_micro
         gy = gy_macro + gy_med + gy_micro
     else:
-        gx = cv2.Sobel(working, cv2.CV_32F, 1, 0, ksize=3) * scale
-        gy = cv2.Sobel(working, cv2.CV_32F, 0, 1, ksize=3) * scale
+        gx = sobel(working, 1, 0) * scale
+        gy = sobel(working, 0, 1) * scale
 
     if options.inject_albedo and options.albedo_source is not None and options.albedo_strength > 1e-4:
         alb = options.albedo_source
@@ -82,15 +82,15 @@ def generate_normal_map(height: np.ndarray, options: NormalMapOptions | None = N
             alb_arr = alb.astype(np.float32) / 255.0
 
         if alb_arr.shape[0] != h or alb_arr.shape[1] != w:
-            alb_arr = cv2.resize(alb_arr, (w, h), interpolation=cv2.INTER_LINEAR)
+            alb_arr = resize(alb_arr, (w, h), "linear")
 
         if margin:
             alb_arr = np.pad(alb_arr, margin, mode="wrap" if options.seamless else "reflect")
 
-        alb_blur = cv2.GaussianBlur(alb_arr, (5, 5), 0)
+        alb_blur = gaussian_blur(alb_arr, 5)
         alb_hp = alb_arr - alb_blur
-        gx += cv2.Sobel(alb_hp, cv2.CV_32F, 1, 0, ksize=3) * scale * (options.albedo_strength * 1.5)
-        gy += cv2.Sobel(alb_hp, cv2.CV_32F, 0, 1, ksize=3) * scale * (options.albedo_strength * 1.5)
+        gx += sobel(alb_hp, 1, 0) * scale * (options.albedo_strength * 1.5)
+        gy += sobel(alb_hp, 0, 1) * scale * (options.albedo_strength * 1.5)
 
     if options.invert_y:
         gy = -gy

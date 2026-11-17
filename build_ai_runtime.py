@@ -30,7 +30,7 @@ from packaging.requirements import Requirement
 REPO = "AyberkA0/pbrcelain"
 ROOTS = ["torch", "torchvision", "transformers", "diffusers", "accelerate", "huggingface_hub"]
 # Shipped inside the app itself; the pack must not shadow them.
-IN_APP = {"numpy", "pillow", "opencv-python-headless", "pyqt6", "pyqt6-qt6", "pyqt6-sip", "pyopengl"}
+IN_APP = {"numpy", "pillow", "pyqt6", "pyqt6-qt6", "pyqt6-sip", "pyopengl"}
 # Parts of the libraries the app never touches at runtime.
 SKIP_PARTS = ("/include/", "/share/cmake/", "/__pycache__/")
 

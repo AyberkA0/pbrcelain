@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import os
-import cv2
 import numpy as np
 from PIL import Image
+from core import imgops
+from core.imgops import draw_line, ellipse_element, gaussian_blur, resize, rgb_to_gray, sobel
 
 
 DETREND_NONE = "none"
@@ -23,7 +24,7 @@ def downsample_for_preview(depth: np.ndarray, max_dim: int = PREVIEW_MAX_DIM) ->
         return depth
     new_w = max(1, int(round(w * scale)))
     new_h = max(1, int(round(h * scale)))
-    return cv2.resize(depth, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    return resize(depth, (new_w, new_h), "area")
 
 
 DEFAULT_BOWL_CURVE: list[tuple[float, float]] = [(0.0, 1.0), (0.5, 1.0), (1.0, 1.0)]
@@ -253,7 +254,7 @@ def detrend(
         h, w = depth.shape
         radius_px = max(2, int(round((radius_pct / 100.0) * max(h, w) / 2)))
         k = radius_px * 2 + 1
-        low_freq = cv2.GaussianBlur(depth, (k, k), 0)
+        low_freq = gaussian_blur(depth, k)
         return depth - low_freq
     raise ValueError(f"Unknown detrend mode: {mode}")
 
@@ -277,7 +278,7 @@ def apply_smoothing(normed: np.ndarray, blur_radius: int) -> np.ndarray:
     if blur_radius <= 0:
         return normed
     k = blur_radius * 2 + 1
-    return cv2.GaussianBlur(normed, (k, k), 0)
+    return gaussian_blur(normed, k)
 
 
 def _find_best_cut(diff_profile: np.ndarray, lo_frac: float = 0.4, hi_frac: float = 0.6) -> int:
@@ -318,7 +319,7 @@ def make_seamless(normed: np.ndarray, feather_pct: float = 6.0) -> np.ndarray:
 
     feather_px = max(2, int(round(min(h, w) * feather_pct / 100.0)))
     k = feather_px * 2 + 1
-    blurred = cv2.GaussianBlur(rolled, (k, k), 0)
+    blurred = gaussian_blur(rolled, k)
 
     dist_x = np.abs(np.arange(w) - shift_x)
     dist_y = np.abs(np.arange(h) - shift_y)
@@ -342,10 +343,10 @@ def apply_local_equalization(normed: np.ndarray, strength: float, radius_pct: fl
     radius_px = max(3, int(round((radius_pct / 100.0) * max(h, w))))
     k = radius_px * 2 + 1
 
-    local_mean = cv2.GaussianBlur(normed, (k, k), 0)
+    local_mean = gaussian_blur(normed, k)
 
     diff_sq = (normed - local_mean) ** 2
-    local_var = cv2.GaussianBlur(diff_sq, (k, k), 0)
+    local_var = gaussian_blur(diff_sq, k)
     local_std = np.sqrt(np.maximum(local_var, 1e-5))
 
     normalized_relief = (normed - local_mean) / (local_std * 2.5 + 1e-4)
@@ -363,10 +364,10 @@ def apply_crevice_suppression(normed: np.ndarray, strength: float, radius_pct: f
     if kernel_size % 2 == 0:
         kernel_size += 1
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+    kernel = ellipse_element(kernel_size)
 
-    blackhat = cv2.morphologyEx(normed, cv2.MORPH_BLACKHAT, kernel)
-    tophat = cv2.morphologyEx(normed, cv2.MORPH_TOPHAT, kernel)
+    blackhat = imgops.blackhat(normed, kernel)
+    tophat = imgops.tophat(normed, kernel)
 
     if strength > 0.0:
         out = normed - blackhat * (strength * 1.2) - tophat * min(strength * 1.6, 1.0)
@@ -392,18 +393,18 @@ def apply_albedo_guidance(
 
     h, w = normed.shape
     if guide.shape[:2] != (h, w):
-        guide_resized = cv2.resize(guide, (w, h), interpolation=cv2.INTER_AREA)
+        guide_resized = resize(guide, (w, h), "area")
     else:
         guide_resized = guide
 
     if guide_resized.ndim == 3:
-        lum = cv2.cvtColor(guide_resized.astype(np.float32), cv2.COLOR_RGB2GRAY)
+        lum = rgb_to_gray(guide_resized.astype(np.float32))
     else:
         lum = guide_resized.astype(np.float32)
     lum = (lum - lum.min()) / (lum.max() - lum.min() + 1e-6)
 
-    grad_x = cv2.Sobel(lum, cv2.CV_32F, 1, 0, ksize=3)
-    grad_y = cv2.Sobel(lum, cv2.CV_32F, 0, 1, ksize=3)
+    grad_x = sobel(lum, 1, 0)
+    grad_y = sobel(lum, 0, 1)
     edge_mag = np.sqrt(grad_x ** 2 + grad_y ** 2)
     edge_mag = np.clip(edge_mag / (np.percentile(edge_mag, 95) + 1e-5), 0.0, 1.0)
 
@@ -526,7 +527,7 @@ def apply_force_seamless_blur(
     res = arr.copy()
     prev_jump = float("inf")
     for _ in range(max_passes):
-        blurred = cv2.GaussianBlur(res, (ksize, ksize), sigmaX=radius * 0.6, sigmaY=radius * 0.6)
+        blurred = gaussian_blur(res, ksize, radius * 0.6)
         res = (1.0 - mask) * res + mask * blurred
 
         top_jump = float(np.mean(np.abs(res[pad_y, :, :] - res[pad_y - 1, :, :])))
@@ -780,7 +781,7 @@ def apply_seamless_linear_mask(
             raw1 = np.copy(ehm)
             mask_map = np.zeros((h, w), dtype=np.float32)
             return ehm, raw1, mask_map
-        ehm = cv2.resize(ehm, (expected_w, expected_h), interpolation=cv2.INTER_LINEAR)
+        ehm = resize(ehm, (expected_w, expected_h), "linear")
 
     raw1 = np.copy(ehm[pad_y : pad_y + h, pad_x : pad_x + w])
 
@@ -931,28 +932,28 @@ def save_raw1_mask_debug_preview(
     cy_len, cx_len = corner_size if corner_size is not None else (int(round(h * 0.10)), int(round(w * 0.10)))
     if cy_len > 1 and cx_len > 1:
         y0, x0 = h - cy_len, w - cx_len
-        cv2.line(r, (x0, y0), (x0 + cx_len - 1, y0 + cy_len - 1), 255.0, thickness=1)
-        cv2.line(g, (x0, y0), (x0 + cx_len - 1, y0 + cy_len - 1), 30.0, thickness=1)
-        cv2.line(b, (x0, y0), (x0 + cx_len - 1, y0 + cy_len - 1), 30.0, thickness=1)
-        cv2.line(r, (x0 + cx_len - 1, y0), (x0, y0 + cy_len - 1), 255.0, thickness=1)
-        cv2.line(g, (x0 + cx_len - 1, y0), (x0, y0 + cy_len - 1), 30.0, thickness=1)
-        cv2.line(b, (x0 + cx_len - 1, y0), (x0, y0 + cy_len - 1), 30.0, thickness=1)
+        draw_line(r, (x0, y0), (x0 + cx_len - 1, y0 + cy_len - 1), 255.0)
+        draw_line(g, (x0, y0), (x0 + cx_len - 1, y0 + cy_len - 1), 30.0)
+        draw_line(b, (x0, y0), (x0 + cx_len - 1, y0 + cy_len - 1), 30.0)
+        draw_line(r, (x0 + cx_len - 1, y0), (x0, y0 + cy_len - 1), 255.0)
+        draw_line(g, (x0 + cx_len - 1, y0), (x0, y0 + cy_len - 1), 30.0)
+        draw_line(b, (x0 + cx_len - 1, y0), (x0, y0 + cy_len - 1), 30.0)
 
         y0_bl, x0_bl = h - cy_len, 0
-        cv2.line(r, (x0_bl, y0_bl), (x0_bl + cx_len - 1, y0_bl + cy_len - 1), 255.0, thickness=1)
-        cv2.line(g, (x0_bl, y0_bl), (x0_bl + cx_len - 1, y0_bl + cy_len - 1), 30.0, thickness=1)
-        cv2.line(b, (x0_bl, y0_bl), (x0_bl + cx_len - 1, y0_bl + cy_len - 1), 30.0, thickness=1)
-        cv2.line(r, (x0_bl + cx_len - 1, y0_bl), (x0_bl, y0_bl + cy_len - 1), 255.0, thickness=1)
-        cv2.line(g, (x0_bl + cx_len - 1, y0_bl), (x0_bl, y0_bl + cy_len - 1), 30.0, thickness=1)
-        cv2.line(b, (x0_bl + cx_len - 1, y0_bl), (x0_bl, y0_bl + cy_len - 1), 30.0, thickness=1)
+        draw_line(r, (x0_bl, y0_bl), (x0_bl + cx_len - 1, y0_bl + cy_len - 1), 255.0)
+        draw_line(g, (x0_bl, y0_bl), (x0_bl + cx_len - 1, y0_bl + cy_len - 1), 30.0)
+        draw_line(b, (x0_bl, y0_bl), (x0_bl + cx_len - 1, y0_bl + cy_len - 1), 30.0)
+        draw_line(r, (x0_bl + cx_len - 1, y0_bl), (x0_bl, y0_bl + cy_len - 1), 255.0)
+        draw_line(g, (x0_bl + cx_len - 1, y0_bl), (x0_bl, y0_bl + cy_len - 1), 30.0)
+        draw_line(b, (x0_bl + cx_len - 1, y0_bl), (x0_bl, y0_bl + cy_len - 1), 30.0)
 
         y0_tr, x0_tr = 0, w - cx_len
-        cv2.line(r, (x0_tr, y0_tr), (x0_tr + cx_len - 1, y0_tr + cy_len - 1), 255.0, thickness=1)
-        cv2.line(g, (x0_tr, y0_tr), (x0_tr + cx_len - 1, y0_tr + cy_len - 1), 30.0, thickness=1)
-        cv2.line(b, (x0_tr, y0_tr), (x0_tr + cx_len - 1, y0_tr + cy_len - 1), 30.0, thickness=1)
-        cv2.line(r, (x0_tr + cx_len - 1, y0_tr), (x0_tr, y0_tr + cy_len - 1), 255.0, thickness=1)
-        cv2.line(g, (x0_tr + cx_len - 1, y0_tr), (x0_tr, y0_tr + cy_len - 1), 30.0, thickness=1)
-        cv2.line(b, (x0_tr + cx_len - 1, y0_tr), (x0_tr, y0_tr + cy_len - 1), 30.0, thickness=1)
+        draw_line(r, (x0_tr, y0_tr), (x0_tr + cx_len - 1, y0_tr + cy_len - 1), 255.0)
+        draw_line(g, (x0_tr, y0_tr), (x0_tr + cx_len - 1, y0_tr + cy_len - 1), 30.0)
+        draw_line(b, (x0_tr, y0_tr), (x0_tr + cx_len - 1, y0_tr + cy_len - 1), 30.0)
+        draw_line(r, (x0_tr + cx_len - 1, y0_tr), (x0_tr, y0_tr + cy_len - 1), 255.0)
+        draw_line(g, (x0_tr + cx_len - 1, y0_tr), (x0_tr, y0_tr + cy_len - 1), 30.0)
+        draw_line(b, (x0_tr + cx_len - 1, y0_tr), (x0_tr, y0_tr + cy_len - 1), 30.0)
 
     rgb = np.stack([r, g, b], axis=-1).round().astype(np.uint8)
     img = Image.fromarray(rgb, mode="RGB")
@@ -974,28 +975,28 @@ def save_mask_debug_preview(
     cy_len, cx_len = corner_size if corner_size is not None else (int(round(h * 0.10)), int(round(w * 0.10)))
     if cy_len > 1 and cx_len > 1:
         y0, x0 = h - cy_len, w - cx_len
-        cv2.line(r, (x0, y0), (x0 + cx_len - 1, y0 + cy_len - 1), 255.0, thickness=1)
-        cv2.line(g, (x0, y0), (x0 + cx_len - 1, y0 + cy_len - 1), 30.0, thickness=1)
-        cv2.line(b, (x0, y0), (x0 + cx_len - 1, y0 + cy_len - 1), 30.0, thickness=1)
-        cv2.line(r, (x0 + cx_len - 1, y0), (x0, y0 + cy_len - 1), 255.0, thickness=1)
-        cv2.line(g, (x0 + cx_len - 1, y0), (x0, y0 + cy_len - 1), 30.0, thickness=1)
-        cv2.line(b, (x0 + cx_len - 1, y0), (x0, y0 + cy_len - 1), 30.0, thickness=1)
+        draw_line(r, (x0, y0), (x0 + cx_len - 1, y0 + cy_len - 1), 255.0)
+        draw_line(g, (x0, y0), (x0 + cx_len - 1, y0 + cy_len - 1), 30.0)
+        draw_line(b, (x0, y0), (x0 + cx_len - 1, y0 + cy_len - 1), 30.0)
+        draw_line(r, (x0 + cx_len - 1, y0), (x0, y0 + cy_len - 1), 255.0)
+        draw_line(g, (x0 + cx_len - 1, y0), (x0, y0 + cy_len - 1), 30.0)
+        draw_line(b, (x0 + cx_len - 1, y0), (x0, y0 + cy_len - 1), 30.0)
 
         y0_bl, x0_bl = h - cy_len, 0
-        cv2.line(r, (x0_bl, y0_bl), (x0_bl + cx_len - 1, y0_bl + cy_len - 1), 255.0, thickness=1)
-        cv2.line(g, (x0_bl, y0_bl), (x0_bl + cx_len - 1, y0_bl + cy_len - 1), 30.0, thickness=1)
-        cv2.line(b, (x0_bl, y0_bl), (x0_bl + cx_len - 1, y0_bl + cy_len - 1), 30.0, thickness=1)
-        cv2.line(r, (x0_bl + cx_len - 1, y0_bl), (x0_bl, y0_bl + cy_len - 1), 255.0, thickness=1)
-        cv2.line(g, (x0_bl + cx_len - 1, y0_bl), (x0_bl, y0_bl + cy_len - 1), 30.0, thickness=1)
-        cv2.line(b, (x0_bl + cx_len - 1, y0_bl), (x0_bl, y0_bl + cy_len - 1), 30.0, thickness=1)
+        draw_line(r, (x0_bl, y0_bl), (x0_bl + cx_len - 1, y0_bl + cy_len - 1), 255.0)
+        draw_line(g, (x0_bl, y0_bl), (x0_bl + cx_len - 1, y0_bl + cy_len - 1), 30.0)
+        draw_line(b, (x0_bl, y0_bl), (x0_bl + cx_len - 1, y0_bl + cy_len - 1), 30.0)
+        draw_line(r, (x0_bl + cx_len - 1, y0_bl), (x0_bl, y0_bl + cy_len - 1), 255.0)
+        draw_line(g, (x0_bl + cx_len - 1, y0_bl), (x0_bl, y0_bl + cy_len - 1), 30.0)
+        draw_line(b, (x0_bl + cx_len - 1, y0_bl), (x0_bl, y0_bl + cy_len - 1), 30.0)
 
         y0_tr, x0_tr = 0, w - cx_len
-        cv2.line(r, (x0_tr, y0_tr), (x0_tr + cx_len - 1, y0_tr + cy_len - 1), 255.0, thickness=1)
-        cv2.line(g, (x0_tr, y0_tr), (x0_tr + cx_len - 1, y0_tr + cy_len - 1), 30.0, thickness=1)
-        cv2.line(b, (x0_tr, y0_tr), (x0_tr + cx_len - 1, y0_tr + cy_len - 1), 30.0, thickness=1)
-        cv2.line(r, (x0_tr + cx_len - 1, y0_tr), (x0_tr, y0_tr + cy_len - 1), 255.0, thickness=1)
-        cv2.line(g, (x0_tr + cx_len - 1, y0_tr), (x0_tr, y0_tr + cy_len - 1), 30.0, thickness=1)
-        cv2.line(b, (x0_tr + cx_len - 1, y0_tr), (x0_tr, y0_tr + cy_len - 1), 30.0, thickness=1)
+        draw_line(r, (x0_tr, y0_tr), (x0_tr + cx_len - 1, y0_tr + cy_len - 1), 255.0)
+        draw_line(g, (x0_tr, y0_tr), (x0_tr + cx_len - 1, y0_tr + cy_len - 1), 30.0)
+        draw_line(b, (x0_tr, y0_tr), (x0_tr + cx_len - 1, y0_tr + cy_len - 1), 30.0)
+        draw_line(r, (x0_tr + cx_len - 1, y0_tr), (x0_tr, y0_tr + cy_len - 1), 255.0)
+        draw_line(g, (x0_tr + cx_len - 1, y0_tr), (x0_tr, y0_tr + cy_len - 1), 30.0)
+        draw_line(b, (x0_tr + cx_len - 1, y0_tr), (x0_tr, y0_tr + cy_len - 1), 30.0)
 
     rgb = np.stack([r, g, b], axis=-1).round().astype(np.uint8)
     img = Image.fromarray(rgb, mode="RGB")
@@ -1074,7 +1075,7 @@ def blur_seamless_corner_grid(
     sigma = max(0.5, radius * 0.6)
 
     for _ in range(max_passes):
-        blurred = cv2.GaussianBlur(res, (ksize, ksize), sigmaX=sigma, sigmaY=sigma)
+        blurred = gaussian_blur(res, ksize, sigma)
         res = (1.0 - mask) * res + mask * blurred
 
         jump_h = np.abs(res[cy, :] - res[cy - 1, :])

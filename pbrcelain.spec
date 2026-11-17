@@ -19,6 +19,8 @@ AI_MODULES = [
     "huggingface_hub", "hf_xet", "tokenizers", "safetensors", "sympy", "mpmath", "networkx",
     "regex", "timm", "jinja2", "markupsafe", "fsspec", "filelock", "yaml", "tqdm", "psutil",
     "scipy", "pandas",
+    # Image filters are done in numpy (core/imgops.py); OpenCV is only used by tests.
+    "cv2",
 ]
 
 hiddenimports = ["OpenGL.platform.darwin" if IS_MAC else "OpenGL.platform.win32", "PyQt6.QtSvg"]
@@ -41,7 +43,7 @@ for _shared in ("PIL", "numpy"):
 datas = [("ui/assets", "ui/assets")]
 if os.path.isfile("ai_runtime.json"):
     datas.append(("ai_runtime.json", "."))
-for dist in ("numpy", "pillow", "opencv-python-headless", "PyOpenGL"):
+for dist in ("numpy", "pillow", "PyOpenGL"):
     try:
         datas += copy_metadata(dist)
     except Exception:

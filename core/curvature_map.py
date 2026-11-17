@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import cv2
 import numpy as np
 from PIL import Image
+from core.imgops import gaussian_blur
 
 _SCALES = (0.002, 0.006, 0.018)
 
@@ -16,7 +16,7 @@ def generate_curvature_map(height: np.ndarray) -> np.ndarray:
 
     curvature = np.zeros_like(padded)
     for sigma in sigmas:
-        curvature += padded - cv2.GaussianBlur(padded, (0, 0), sigma)
+        curvature += padded - gaussian_blur(padded, 0, sigma)
     curvature = curvature[pad:-pad, pad:-pad]
 
     scale = float(np.percentile(np.abs(curvature), 99.5))

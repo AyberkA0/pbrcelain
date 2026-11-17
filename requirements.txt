@@ -18,4 +18,3 @@ huggingface_hub>=0.24
 # Image / array processing
 numpy
 Pillow
-opencv-python-headless

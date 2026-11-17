@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import cv2
 import numpy as np
 from PIL import Image
 
 from core.tiling import filter_wrapped
+from core.imgops import box_filter, gaussian_blur, resize
 
 
 ROUGHNESS_PRESETS: dict[str, dict] = {
@@ -88,7 +88,7 @@ def generate_roughness_map(normal: np.ndarray, options: RoughnessMapOptions | No
     if window_px % 2 == 0:
         window_px += 1
     mean_n = filter_wrapped(
-        n, window_px // 2, lambda a: cv2.boxFilter(a, ddepth=-1, ksize=(window_px, window_px))
+        n, window_px // 2, lambda a: box_filter(a, window_px)
     )
     avg_len = np.clip(np.linalg.norm(mean_n, axis=-1), 0.0, 1.0)
 
@@ -98,8 +98,8 @@ def generate_roughness_map(normal: np.ndarray, options: RoughnessMapOptions | No
     if options.height_source is not None and abs(options.height_cavity_factor) > 1e-3:
         h_arr = options.height_source.astype(np.float32)
         if h_arr.shape[0] != h or h_arr.shape[1] != w:
-            h_arr = cv2.resize(h_arr, (w, h), interpolation=cv2.INTER_LINEAR)
-        h_smooth = filter_wrapped(h_arr, 4, lambda a: cv2.GaussianBlur(a, (9, 9), 0))
+            h_arr = resize(h_arr, (w, h), "linear")
+        h_smooth = filter_wrapped(h_arr, 4, lambda a: gaussian_blur(a, 9))
         cavity = np.clip((h_smooth - h_arr) * 4.0, -1.0, 1.0)
         if options.height_cavity_factor > 0:
             roughness += options.height_cavity_factor * np.maximum(0.0, cavity)
@@ -117,9 +117,9 @@ def generate_roughness_map(normal: np.ndarray, options: RoughnessMapOptions | No
             lum = alb.astype(np.float32) / 255.0
 
         if lum.shape[0] != h or lum.shape[1] != w:
-            lum = cv2.resize(lum, (w, h), interpolation=cv2.INTER_LINEAR)
+            lum = resize(lum, (w, h), "linear")
 
-        lum_var = np.abs(lum - filter_wrapped(lum, 3, lambda a: cv2.GaussianBlur(a, (7, 7), 0)))
+        lum_var = np.abs(lum - filter_wrapped(lum, 3, lambda a: gaussian_blur(a, 7)))
         roughness += options.albedo_contrast_factor * (lum_var * 2.5)
 
     if options.invert:
@@ -128,7 +128,7 @@ def generate_roughness_map(normal: np.ndarray, options: RoughnessMapOptions | No
     if options.imperfection_mask is not None and options.imperfection_strength > 1e-4:
         mask = options.imperfection_mask
         if mask.shape[0] != h or mask.shape[1] != w:
-            mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_LINEAR)
+            mask = resize(mask, (w, h), "linear")
 
         if mask.ndim == 3 and mask.shape[2] >= 4:
             if mask.dtype == np.uint8:

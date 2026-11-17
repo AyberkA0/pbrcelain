@@ -34,6 +34,7 @@ import numpy as np
 
 from ui import trackpad
 from ui.theme import legacy_style, pick
+from core.imgops import resize
 
 _CARD_STYLE = "QFrame#PainterCard { background-color: #323232; border: 1px solid #202020; border-radius: 3px; padding: 6px; }"
 
@@ -126,7 +127,7 @@ class ImperfectionCanvasWidget(QWidget):
             return
         h, w = mask.shape[:2]
         if h != self.canvas_h or w != self.canvas_w:
-            mask = cv2_resize_mask(mask, self.canvas_w, self.canvas_h)
+            mask = resize_mask(mask, self.canvas_w, self.canvas_h)
         c_arr = np.ascontiguousarray(mask, dtype=np.uint8)
         qimg = QImage(c_arr.data, self.canvas_w, self.canvas_h, self.canvas_w * 4, QImage.Format.Format_RGBA8888)
         self._paint_image = qimg.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied).copy()
@@ -747,6 +748,5 @@ class ImperfectionPainterDialog(QDialog):
         return self.canvas.get_mask_array()
 
 
-def cv2_resize_mask(mask: np.ndarray, target_w: int, target_h: int) -> np.ndarray:
-    import cv2
-    return cv2.resize(mask, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+def resize_mask(mask: np.ndarray, target_w: int, target_h: int) -> np.ndarray:
+    return resize(mask, (target_w, target_h), "linear")
