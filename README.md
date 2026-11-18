@@ -108,7 +108,7 @@ keep everything, so you can reopen and keep adjusting without re-running the mod
 ## 4K, 8K and beyond
 
 General image AIs work at a small, fixed output size, so a 4K or 8K photo loses its
-fine relief. PBRCELAIN's **More Detail with Chunks** runs the depth model over the
+fine relief. PBRCELAIN's **Full Resolution with Chunk Estimation** runs the depth model over the
 photo in overlapping chunks, so the height map keeps your photo's full resolution,
 with no upper limit, and stays as accurate as the AI model.
 

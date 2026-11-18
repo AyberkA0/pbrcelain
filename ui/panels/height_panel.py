@@ -154,7 +154,7 @@ class HeightPanel(GeneratePropertiesContainer):
             "Higher quality, but requires more computation."
         )
         self.chunk_checkbox.stateChanged.connect(self._on_chunk_toggled)
-        page.add_section("More Detail with Chunks", toggle=self.chunk_checkbox)
+        page.add_section("Full Resolution with Chunk Estimation", toggle=self.chunk_checkbox)
 
         self.chunk_batch_spin = QSpinBox()
         self.chunk_batch_spin.setRange(1, 16)
