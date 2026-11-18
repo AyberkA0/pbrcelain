@@ -146,6 +146,27 @@ def _own_enabled(spin) -> bool:
     return not spin.testAttribute(Qt.WidgetAttribute.WA_ForceDisabled)
 
 
+def _bind(spin: QAbstractSpinBox, refresh) -> None:
+    """Remember a control drawn from `spin`, for set_quietly()."""
+    controls = getattr(spin, "_pbr_bound_controls", None)
+    if controls is None:
+        controls = []
+        spin._pbr_bound_controls = controls
+    controls.append(refresh)
+
+
+def set_quietly(spin: QAbstractSpinBox, value) -> None:
+    """Set a value without emitting valueChanged, and still redraw the knob or
+    slider shown for it (they otherwise follow valueChanged and go stale)."""
+    spin.blockSignals(True)
+    try:
+        spin.setValue(int(round(value)) if _is_int(spin) else float(value))
+    finally:
+        spin.blockSignals(False)
+    for refresh in getattr(spin, "_pbr_bound_controls", ()):
+        refresh()
+
+
 def wants_slider(spin: QAbstractSpinBox) -> bool:
     # Every bounded number gets the same control (knob in sections, slider
     # inline) so equal kinds of value never look different.
@@ -169,6 +190,7 @@ class _SpinSlider(QSlider):
             self.setToolTip(spin.toolTip())
         self._sync()
         spin.valueChanged.connect(self._sync)
+        _bind(spin, self._sync)
         self.valueChanged.connect(self._push)
         spin.installEventFilter(self)
         self.setEnabled(_own_enabled(spin))
@@ -325,6 +347,7 @@ class Knob(QWidget):
         spin.setParent(self)
         spin.hide()
         spin.valueChanged.connect(self.update)
+        _bind(spin, self.update)
         spin.installEventFilter(self)
         self._diameter = diameter
         self.setFixedSize(diameter + 6, diameter + 18)

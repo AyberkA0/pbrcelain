@@ -20,6 +20,7 @@ from core.roughness_map import ROUGHNESS_PRESETS, RoughnessMapOptions
 from ui.imperfection_painter import ImperfectionPainterDialog
 from ui.theme import legacy_style
 from ui.panels.base import GeneratePropertiesContainer
+from ui.value_controls import set_quietly
 
 
 class RoughnessPanel(GeneratePropertiesContainer):
@@ -196,20 +197,12 @@ class RoughnessPanel(GeneratePropertiesContainer):
         if preset_name not in ROUGHNESS_PRESETS or preset_name == "Custom":
             return
         p = ROUGHNESS_PRESETS[preset_name]
-        self.base_roughness_spin.blockSignals(True)
-        self.strength_spin.blockSignals(True)
-        self.height_cavity_spin.blockSignals(True)
-        self.albedo_contrast_spin.blockSignals(True)
-
-        self.base_roughness_spin.setValue(p["base_roughness"])
-        self.strength_spin.setValue(p["strength"])
-        self.height_cavity_spin.setValue(p["height_cavity"])
-        self.albedo_contrast_spin.setValue(p["albedo_contrast"])
-
-        self.base_roughness_spin.blockSignals(False)
-        self.strength_spin.blockSignals(False)
-        self.height_cavity_spin.blockSignals(False)
-        self.albedo_contrast_spin.blockSignals(False)
+        # Quietly, so the edits do not switch the preset back to Custom; the
+        # knobs are still redrawn with the preset's values.
+        set_quietly(self.base_roughness_spin, p["base_roughness"])
+        set_quietly(self.strength_spin, p["strength"])
+        set_quietly(self.height_cavity_spin, p["height_cavity"])
+        set_quietly(self.albedo_contrast_spin, p["albedo_contrast"])
         self.propertiesChanged.emit()
 
     def reset_generate_defaults(self) -> None:

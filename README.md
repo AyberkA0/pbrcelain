@@ -9,6 +9,13 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/4K-supported-4a72d9?style=flat-square" alt="4K">
+  <img src="https://img.shields.io/badge/8K-supported-4a72d9?style=flat-square" alt="8K">
+  <img src="https://img.shields.io/badge/resolution-unlimited-4a72d9?style=flat-square" alt="Unlimited resolution">
+  <img src="https://img.shields.io/badge/output-seamless%20%26%20tileable-4a72d9?style=flat-square" alt="Seamless and tileable">
+</p>
+
+<p align="center">
   <a href="https://github.com/AyberkA0/pbrcelain/releases"><img src="https://img.shields.io/badge/Download-macOS%20%7C%20Windows-0a84ff?style=for-the-badge" alt="Download for macOS or Windows"></a>
 </p>
 
@@ -79,6 +86,31 @@ xattr -dr com.apple.quarantine /Applications/PBRCELAIN.app
 
 Hover over any setting to see what it does. Projects are saved as `.pcln` files that
 keep everything, so you can reopen and keep adjusting without re-running the model.
+
+## 4K, 8K and beyond: why not just ask an image AI?
+
+You can ask a general image AI to "make a height map of this photo", and it will
+draw something that looks like one. But it works at a fixed, small output size, so
+a 4K or 8K photo comes back downscaled and its fine relief is lost, and a picture
+that only *looks* plausible is not a measured depth estimate.
+
+PBRCELAIN combines the two approaches. **More Detail with Chunks** runs a dedicated
+depth model over the photo in overlapping chunks at the model's native resolution,
+then blends them into one map guided by a full-image pass. The output resolution
+therefore follows your photo, with no upper limit, as with classic filter-based
+height map tools, while the relief comes from an AI depth model and is far more
+accurate than what those filters can infer. A 4K photo gives a 4K height map, an 8K
+photo an 8K one.
+
+## Which depth model?
+
+- **Depth Anything V2** for deep, uneven surfaces with lots of relief: pebbles,
+  gravel, rocks, bark, rubble.
+- **Marigold** for flatter, more regular surfaces with a pattern: tiles, pavers,
+  brick walls, planks, fabric.
+
+Both are one click away in **Height › Depth Model**; if a result looks off, try the
+other one.
 
 ## Use from scripts and AI agents
 

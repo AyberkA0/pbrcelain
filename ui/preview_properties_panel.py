@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.theme import IS_MAC
-from ui.value_controls import attach_scrub, find_spin, slider_field
+from ui.value_controls import attach_scrub, find_spin, set_quietly, slider_field
 
 
 def _enhance_form(group: QWidget) -> QWidget:
@@ -458,28 +458,16 @@ class PreviewPropertiesPanel(QWidget):
         self.background_brightness_spin.setValue(data.get("background_brightness", self.background_brightness_spin.value()))
 
     def set_distance_value(self, val: float) -> None:
-        self.distance_spin.blockSignals(True)
-        self.distance_spin.setValue(val)
-        self.distance_spin.blockSignals(False)
+        set_quietly(self.distance_spin, val)
 
     def set_pivot_values(self, x: float, y: float, z: float) -> None:
-        self.pivot_x_spin.blockSignals(True)
-        self.pivot_y_spin.blockSignals(True)
-        self.pivot_z_spin.blockSignals(True)
-        self.pivot_x_spin.setValue(x)
-        self.pivot_y_spin.setValue(y)
-        self.pivot_z_spin.setValue(z)
-        self.pivot_x_spin.blockSignals(False)
-        self.pivot_y_spin.blockSignals(False)
-        self.pivot_z_spin.blockSignals(False)
+        set_quietly(self.pivot_x_spin, x)
+        set_quietly(self.pivot_y_spin, y)
+        set_quietly(self.pivot_z_spin, z)
 
     def set_light_values(self, az: float, el: float) -> None:
-        self.light_azimuth_spin.blockSignals(True)
-        self.light_elevation_spin.blockSignals(True)
-        self.light_azimuth_spin.setValue(az)
-        self.light_elevation_spin.setValue(el)
-        self.light_azimuth_spin.blockSignals(False)
-        self.light_elevation_spin.blockSignals(False)
+        set_quietly(self.light_azimuth_spin, az)
+        set_quietly(self.light_elevation_spin, el)
 
     def set_auto_rotate(self, val: bool) -> None:
         self.auto_rotate_checkbox.blockSignals(True)

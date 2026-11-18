@@ -10,6 +10,7 @@ from PyQt6.QtCore import QEvent, QSettings, QSize, QTimer, Qt
 from PyQt6.QtGui import QAction, QColor, QKeySequence, QImage, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QSizePolicy,
     QFileDialog,
     QFrame,
@@ -157,6 +158,7 @@ _GENERATE_SOURCE = {
 
 SIDEBAR_START_WIDTH = 370
 _TITLE_ICONS_LEFT = 78  # first title icon, right of the macOS window buttons
+_SKIP_CHUNK_WARNING_KEY = "warnings/skip_chunk_estimation"
 MAP_WELL_HEIGHT = 150
 
 RECENT_PROJECTS_KEY = "recentProjects"
@@ -328,8 +330,16 @@ class MainWindow(QMainWindow):
             panels={mt: panel.to_options_dict() for mt, panel in self._panels_by_type.items()},
             saved={mt: dict(v) for mt, v in self._properties_snapshot.items()},
             current_map=self.current_map_type,
-            view=self.preview_properties_panel.get_settings(),
+            view=self._undoable_view_settings(),
         )
+
+    # Orbiting, zooming and panning the 3D view only changes how the material
+    # is looked at; undo and redo leave the camera where it is.
+    _CAMERA_KEYS = ("distance", "pivot_x", "pivot_y", "pivot_z")
+
+    def _undoable_view_settings(self) -> dict:
+        settings = self.preview_properties_panel.get_settings()
+        return {k: v for k, v in settings.items() if k not in self._CAMERA_KEYS}
 
     def _restore_state(self, snap: Snapshot) -> None:
         self._invalidate_properties_preview()
@@ -1890,15 +1900,22 @@ class MainWindow(QMainWindow):
                 self._infer_is_seamless = False
 
         tiled = self.height_panel.is_chunked()
-        if tiled:
-            reply = QMessageBox.question(
-                self,
-                "Chunk estimation enabled",
+        if tiled and not QSettings().value(_SKIP_CHUNK_WARNING_KEY, False, type=bool):
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setWindowTitle("Chunk estimation enabled")
+            box.setText(
                 "Chunk estimation runs the model many times (1 full-image pass + "
                 "one pass per chunk) and can take significantly longer, especially "
-                "on CPU. Continue?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                "on CPU. Continue?"
             )
+            box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            box.setDefaultButton(QMessageBox.StandardButton.Yes)
+            dont_ask = QCheckBox("Don't show this again")
+            box.setCheckBox(dont_ask)
+            reply = box.exec()
+            if reply == QMessageBox.StandardButton.Yes and dont_ask.isChecked():
+                QSettings().setValue(_SKIP_CHUNK_WARNING_KEY, True)
             if reply != QMessageBox.StandardButton.Yes:
                 self._generating_all = False
                 self._set_busy(False)
