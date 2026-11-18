@@ -21,10 +21,14 @@ class _DragArea(QObject):
         etype = event.type()
         if etype == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
             window = obj.window()
-            self._offset = event.globalPosition().toPoint() - window.frameGeometry().topLeft()
             handle = window.windowHandle()
-            if handle is not None:
-                handle.startSystemMove()
+            # The system move follows the pointer by itself. Moving the window
+            # from mouse events as well made two movers fight and the window
+            # shake, so that is only the fallback when the system move can't start.
+            if handle is not None and handle.startSystemMove():
+                self._offset = None
+            else:
+                self._offset = event.globalPosition().toPoint() - window.frameGeometry().topLeft()
             return True
         if etype == QEvent.Type.MouseMove and self._offset is not None:
             if event.buttons() & Qt.MouseButton.LeftButton:
