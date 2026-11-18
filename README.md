@@ -31,8 +31,8 @@ the result live on a 3D preview.
 Materials generated from single photos, previewed in the built-in 3D viewport.
 
 <p align="center">
-  <img src="docs/media/tree-bark.gif" alt="Tree bark material in the 3D viewport" width="520"><br>
-  <em>Tree bark</em>
+  <img src="docs/media/mossy-ground.gif" alt="Mossy ground material rotating in the 3D viewport" width="520"><br>
+  <em>Mossy ground</em>
 </p>
 
 <p align="center">
