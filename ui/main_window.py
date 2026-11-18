@@ -164,7 +164,7 @@ _SKIP_CHUNK_WARNING_KEY = "warnings/skip_chunk_estimation"
 _CUSTOM_TITLE_BAR = IS_MAC or IS_WINDOWS
 _TITLE_BAR_HEIGHT = mac_window.TITLE_BAR_HEIGHT
 # First title icon: right of the macOS window buttons, or at the left edge on Windows.
-_TITLE_ICONS_LEFT = 6 if IS_WINDOWS else 78
+_TITLE_ICONS_LEFT = 6 if IS_WINDOWS else 78 + mac_window.WINDOW_BUTTONS_SHIFT
 MAP_WELL_HEIGHT = 150
 
 RECENT_PROJECTS_KEY = "recentProjects"
@@ -1093,8 +1093,16 @@ class MainWindow(QMainWindow):
             return False, 0
         return super().nativeEvent(event_type, message)
 
+    def _center_window_buttons(self) -> None:
+        if IS_MAC:
+            mac_window.center_window_buttons(self)
+            # AppKit lays the buttons out again after some changes; win the race.
+            QTimer.singleShot(0, lambda: mac_window.center_window_buttons(self))
+
     def changeEvent(self, event) -> None:
         super().changeEvent(event)
+        if event.type() in (QEvent.Type.WindowStateChange, QEvent.Type.ActivationChange):
+            self._center_window_buttons()
         if getattr(self, "_caption_buttons", None) is not None and event.type() in (
             QEvent.Type.WindowStateChange, QEvent.Type.ActivationChange
         ):
@@ -1150,6 +1158,7 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        self._center_window_buttons()
         if hasattr(self, "_view_options_panel"):
             self._layout_view_options_panel()
 
@@ -1177,6 +1186,7 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        self._center_window_buttons()
         if self._frameless is not None:
             self._frameless.apply_native_style()
         handle = self.windowHandle()
