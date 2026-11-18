@@ -5,10 +5,10 @@ from PyQt6.QtWidgets import QMainWindow, QSplitter
 
 _KEYS = ("window/geometry", "window/sidebarSplit", "window/previewSplit")
 
-# The window opens at a wide 20:9 shape, about 70 % of the screen's width.
-_ASPECT = 20 / 9
-_WIDTH_SHARE = 0.70
-_MAX_WIDTH = 1800
+# The size the window opens at (logical pixels). On a screen too small for
+# it, it shrinks to fit and keeps its shape.
+DEFAULT_SIZE = (1012, 601)
+_MAX_SCREEN_SHARE = 0.94
 
 
 def fit_to_screen(window: QMainWindow, sidebar_splitter: QSplitter, preview_splitter: QSplitter,
@@ -17,11 +17,9 @@ def fit_to_screen(window: QMainWindow, sidebar_splitter: QSplitter, preview_spli
     if screen is None:
         return
     avail = screen.availableGeometry()
-    w = min(int(avail.width() * _WIDTH_SHARE), _MAX_WIDTH)
-    h = int(w / _ASPECT)
-    if h > avail.height() * 0.9:
-        h = int(avail.height() * 0.9)
-        w = int(h * _ASPECT)
+    w, h = DEFAULT_SIZE
+    fit = min(1.0, avail.width() * _MAX_SCREEN_SHARE / w, avail.height() * _MAX_SCREEN_SHARE / h)
+    w, h = int(w * fit), int(h * fit)
     minimum = window.minimumSizeHint()
     w, h = max(w, minimum.width()), max(h, minimum.height())
     window.setGeometry(avail.x() + (avail.width() - w) // 2, avail.y() + (avail.height() - h) // 2, w, h)
