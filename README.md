@@ -39,17 +39,17 @@ Materials generated from single photos, previewed in the built-in 3D viewport.
 
 <p align="center">
   <img src="docs/media/mossy-ground.gif" alt="Mossy ground material rotating in the 3D viewport" width="520"><br>
-  <em>Mossy ground</em>
+  <em>Mossy ground</em> (1254x1254)
 </p>
 
 <p align="center">
   <img src="docs/media/strange-pebbles.gif" alt="Strange pebbles material rotating in the 3D viewport" width="520"><br>
-  <em>Strange pebbles</em>
+  <em>Strange pebbles</em> (1254x1254)
 </p>
 
 <p align="center">
   <img src="docs/media/porcelain.gif" alt="Broken blue-and-white porcelain tiles rotating in the 3D viewport" width="520"><br>
-  <em>Porcelain</em>
+  <em>Porcelain</em> (1254x1254)
 </p>
 
 ## Download
