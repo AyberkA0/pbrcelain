@@ -61,6 +61,11 @@ first time you generate a Height map. On Windows with an NVIDIA graphics card yo
 can pick the GPU (CUDA) version, about 2 GB, which runs the depth models much
 faster; the CPU version is about 180 MB. On a Mac they run on the GPU (about 160 MB).
 
+Windows builds are to be signed with free code signing provided by
+[SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org) (application pending; current builds are
+unsigned). See the [code signing policy](docs/CODE_SIGNING.md).
+
 ### First launch on macOS
 
 The app is not notarized by Apple yet, so macOS blocks it the first time:
@@ -128,6 +133,8 @@ No extra setup: it is the same app binary (on macOS,
 - [Running from source](docs/DEVELOPMENT.md): installing with Python, GPU setup,
   file associations and project file details.
 - [Changelog](CHANGELOG.md): what changed in each version.
+- [Code signing policy](docs/CODE_SIGNING.md): how Windows builds are signed, and what
+  the app sends over the network (nothing about you).
 
 ## License
 

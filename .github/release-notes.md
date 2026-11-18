@@ -20,7 +20,9 @@ estimation runs on the GPU (Metal/MPS).
 confirmation (**More info › Run anyway**) since the build is unsigned. With an
 NVIDIA graphics card, the app offers the GPU (CUDA) version of the AI components
 on first use (about 2 GB, downloaded from PyTorch); otherwise it downloads the CPU
-version (about 180 MB).
+version (about 180 MB). Windows builds are to be signed with free code signing
+provided by SignPath.io, certificate by SignPath Foundation (application pending;
+see the [code signing policy](https://github.com/AyberkA0/pbrcelain/blob/main/docs/CODE_SIGNING.md)).
 
 ## What's new
 
