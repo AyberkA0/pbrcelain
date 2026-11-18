@@ -7,7 +7,7 @@ from typing import Optional
 import numpy as np
 from PIL import Image
 from PyQt6.QtCore import QEvent, QSettings, QSize, QTimer, Qt
-from PyQt6.QtGui import QAction, QColor, QKeySequence, QImage, QPixmap
+from PyQt6.QtGui import QAction, QColor, QFont, QKeySequence, QImage, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -58,7 +58,7 @@ from ui.panels.ao_panel import AOPanel
 from ui.preview_3d import Preview3DWidget
 from ui.preview_properties_panel import PreviewPropertiesPanel
 from ui.progress_dialog import OperationProgressDialog
-from ui import mac_window, window_layout
+from ui import mac_window, win_window, window_layout
 from ui.theme import IS_MAC, IS_WINDOWS, PLATFORM_THEME, legacy_style, pick, theme_changed
 from ui.tiled_preview_dialog import TiledPreviewDialog
 from ui.export_dialog import ExportDialog
@@ -157,12 +157,26 @@ _GENERATE_SOURCE = {
 }
 
 SIDEBAR_START_WIDTH = 370
-_TITLE_ICONS_LEFT = 78  # first title icon, right of the macOS window buttons
 _SKIP_CHUNK_WARNING_KEY = "warnings/skip_chunk_estimation"
+# Our own title bar on both systems. On macOS the native window buttons sit in
+# the top-left corner; the frameless Windows window shows the app name there and
+# draws Windows caption buttons in the top-right corner.
+_CUSTOM_TITLE_BAR = IS_MAC or IS_WINDOWS
+_TITLE_BAR_HEIGHT = mac_window.TITLE_BAR_HEIGHT
+# First title item: right of the macOS window buttons, or the app name on Windows.
+_TITLE_ICONS_LEFT = 12 if IS_WINDOWS else 78
 MAP_WELL_HEIGHT = 150
 
 RECENT_PROJECTS_KEY = "recentProjects"
 MAX_RECENT_PROJECTS = 8
+
+
+def _size_text(size: int, scale: int | None = None) -> str:
+    """Bytes as MB, or as GB from 1 GB up. `scale` picks the unit by another
+    size, so "1.2 / 2.9 GB" shares one unit."""
+    if (scale if scale is not None else size) >= 1e9:
+        return f"{size / 1e9:.1f} GB" if scale is None else f"{size / 1e9:.1f}"
+    return f"{size / 1e6:.0f} MB" if scale is None else f"{size / 1e6:.0f}"
 
 
 def _heading(text: str) -> str:
@@ -181,8 +195,12 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.resize(1440, 860)
+        self._frameless = None
         if IS_MAC:
             mac_window.hide_title_bar(self)
+        elif IS_WINDOWS:
+            self._frameless = win_window.FramelessWindow(self)
+        self._caption_buttons = None
         self._initial_layout_done = False
         self._taskbar_progress = None
         self.setAcceptDrops(True)
@@ -239,7 +257,7 @@ class MainWindow(QMainWindow):
         for action in (self.undo_action, self.redo_action):
             action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
             self.addAction(action)
-        if PLATFORM_THEME == "mac":
+        if IS_MAC:
             edit_menu = self.menuBar().addMenu("Edit")
             edit_menu.addAction(self.undo_action)
             edit_menu.addAction(self.redo_action)
@@ -265,13 +283,13 @@ class MainWindow(QMainWindow):
             splitter = getattr(self, "_main_splitter", None)
             sidebar = splitter.widget(0) if splitter is not None else None
             floating = sidebar is not None and sidebar.isHidden()
-        # Floating, the pill fills the window's top-left corner, under the macOS
-        # window buttons; the icons keep their place. Docked, it is invisible.
+        # Floating, the pill fills the window's top-left corner (on macOS under
+        # the window buttons); the icons keep their place. Docked, it is invisible.
         title_row = pill.parentWidget().layout()
         if floating:
             title_row.setContentsMargins(0, 0, 14, 0)
             pill.layout().setContentsMargins(_TITLE_ICONS_LEFT, 0, 6, 0)
-            pill.setMinimumHeight(mac_window.TITLE_BAR_HEIGHT)
+            pill.setMinimumHeight(_TITLE_BAR_HEIGHT)
         else:
             title_row.setContentsMargins(_TITLE_ICONS_LEFT, 0, 14, 1)
             pill.layout().setContentsMargins(0, 0, 0, 0)
@@ -301,10 +319,13 @@ class MainWindow(QMainWindow):
                 self._project_section_layout.removeWidget(title)
                 title.setParent(self.centralWidget())
                 title.setStyleSheet("#TitleBarSpace { background: transparent; border: none; }")
+            self._style_title_pill()
+            if title is not None:
+                title.ensurePolished()
+                title.layout().activate()
                 title.setGeometry(0, 0, title.sizeHint().width(), title.height())
                 title.show()
                 title.raise_()
-            self._style_title_pill()
         else:
             if title is not None:
                 title.setStyleSheet("")
@@ -405,13 +426,19 @@ class MainWindow(QMainWindow):
         add("Exit", self.close)
 
     def _build_mac_menu(self) -> None:
-        file_menu = self.menuBar().addMenu("File")
+        # macOS shows this in the global menu bar. Windows has no such bar and a
+        # bar inside the window would break the shared look, so there the menu is
+        # never shown: its actions are added to the window for their shortcuts,
+        # and the commands are in the material header's menu.
+        file_menu = self.menuBar().addMenu("File") if IS_MAC else QMenu("File", self)
 
         def add(text: str, handler, shortcut: str) -> None:
             action = QAction(text, self)
             action.setShortcut(shortcut)
             action.triggered.connect(handler)
             file_menu.addAction(action)
+            if not IS_MAC:
+                self.addAction(action)
 
         add("New Project", self._new_project, "Ctrl+N")
         add("Open Project…", self._open_project, "Ctrl+O")
@@ -427,6 +454,8 @@ class MainWindow(QMainWindow):
         quit_action.setMenuRole(QAction.MenuRole.QuitRole)
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
+        if not IS_MAC:
+            self.addAction(quit_action)
 
     def _build_windows_commands(self) -> None:
         from ui import windows_theme
@@ -530,12 +559,12 @@ class MainWindow(QMainWindow):
 
         selector = self._build_map_selector()
 
-        if IS_MAC:
+        if _CUSTOM_TITLE_BAR:
             title_space = QWidget()
             title_space.setObjectName("TitleBarSpace")
             title_space.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            title_space.setFixedHeight(mac_window.TITLE_BAR_HEIGHT)
-            mac_window.install_drag_area(title_space)
+            title_space.setFixedHeight(_TITLE_BAR_HEIGHT)
+            self._install_drag_area(title_space)
             title_row = QHBoxLayout(title_space)
             title_row.setContentsMargins(_TITLE_ICONS_LEFT, 0, 14, 1)
             title_row.setSpacing(0)
@@ -549,6 +578,15 @@ class MainWindow(QMainWindow):
             title_row.addWidget(pill, 0, Qt.AlignmentFlag.AlignVCenter)
             self._title_pill = pill
             self._style_title_pill()
+            if IS_WINDOWS:
+                app_name = QLabel("PBRCELAIN")
+                app_name.setObjectName("TitleAppName")
+                name_font = app_name.font()
+                name_font.setWeight(QFont.Weight.DemiBold)
+                name_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.6)
+                app_name.setFont(name_font)
+                pill_row.addWidget(app_name)
+                pill_row.addSpacing(8)
             self._title_buttons = []
             for icon, tip, slot in (
                 ("sidebar", "Show or hide the sidebar", self._toggle_sidebar),
@@ -982,13 +1020,22 @@ class MainWindow(QMainWindow):
         # The title bar strip over the viewport is invisible but still drags
         # the window, like the strip above the material slots.
         self._viewport_title_drag = None
-        if IS_MAC:
+        if _CUSTOM_TITLE_BAR:
             drag = QWidget(viewport)
             drag.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
             drag.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-            drag.setFixedHeight(mac_window.TITLE_BAR_HEIGHT)
-            mac_window.install_drag_area(drag)
+            drag.setFixedHeight(_TITLE_BAR_HEIGHT)
+            self._install_drag_area(drag)
             self._viewport_title_drag = drag
+        if IS_WINDOWS and self._frameless is not None:
+            from ui.caption_buttons import CaptionButtons
+
+            # In the window's top-right corner, which is always over the 3D view.
+            buttons = CaptionButtons(self, _TITLE_BAR_HEIGHT, viewport)
+            self._caption_buttons = buttons
+            self._frameless.max_button = buttons.maximize_button
+            self._style_caption_buttons()
+            theme_changed.connect(self._style_caption_buttons)
 
         preview_heading = ToggleHeading(_heading("VIEW OPTIONS"))
         preview_heading.setProperty("role", "panel-heading")
@@ -1036,6 +1083,40 @@ class MainWindow(QMainWindow):
         edge = "rgba(255, 255, 255, 0.14)" if dark else "rgba(0, 0, 0, 0.16)"
         return background, edge
 
+    def _install_drag_area(self, widget: QWidget) -> None:
+        """Let `widget` move the window like a title bar."""
+        if IS_MAC:
+            mac_window.install_drag_area(widget)
+        elif self._frameless is not None:
+            self._frameless.drag_areas.append(widget)
+
+    def nativeEvent(self, event_type, message):
+        if IS_WINDOWS:
+            frameless = getattr(self, "_frameless", None)
+            if frameless is not None:
+                handled, result = frameless.native_event(event_type, message)
+                if handled:
+                    return True, result
+            # Not ours: let Qt handle it. Calling super().nativeEvent() here
+            # crashes PyQt6 on Windows (access violation), so answer directly.
+            return False, 0
+        return super().nativeEvent(event_type, message)
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if getattr(self, "_caption_buttons", None) is not None and event.type() in (
+            QEvent.Type.WindowStateChange, QEvent.Type.ActivationChange
+        ):
+            self._caption_buttons.refresh()
+
+    def _style_caption_buttons(self) -> None:
+        background, edge = self._floating_surface()
+        self._caption_buttons.setStyleSheet(
+            f"QFrame#CaptionButtons {{ background-color: {background};"
+            f" border: none; border-left: 1px solid {edge}; border-bottom: 1px solid {edge};"
+            " border-bottom-left-radius: 10px; }"
+        )
+
     def _style_view_options_panel(self) -> None:
         background, edge = self._floating_surface()
         self._view_options_panel.setStyleSheet(
@@ -1050,8 +1131,11 @@ class MainWindow(QMainWindow):
     def _layout_view_options_panel(self) -> None:
         panel, viewport = self._view_options_panel, self._viewport_frame
         if self._viewport_title_drag is not None:
-            self._viewport_title_drag.setGeometry(0, 0, viewport.width(), mac_window.TITLE_BAR_HEIGHT)
+            self._viewport_title_drag.setGeometry(0, 0, viewport.width(), _TITLE_BAR_HEIGHT)
             self._viewport_title_drag.raise_()
+        if self._caption_buttons is not None:
+            self._caption_buttons.move(viewport.width() - self._caption_buttons.width(), 0)
+            self._caption_buttons.raise_()
         margin = _VIEW_OPTIONS_MARGIN
         max_width = max(120, viewport.width() - 2 * margin)
         max_height = max(40, viewport.height() - 2 * margin)
@@ -1102,6 +1186,8 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        if self._frameless is not None:
+            self._frameless.apply_native_style()
         handle = self.windowHandle()
         if handle is not None and not getattr(self, "_screen_watch", False):
             self._screen_watch = True
@@ -1110,11 +1196,11 @@ class MainWindow(QMainWindow):
         if self._initial_layout_done or PLATFORM_THEME == "legacy":
             return
         self._initial_layout_done = True
-        if not window_layout.restore(self, self._main_splitter, self._preview_splitter):
-            window_layout.fit_to_screen(
-                self, self._main_splitter, self._preview_splitter,
-                sidebar_ratio=pick(mac=0.34, windows=0.32), sidebar_min=pick(mac=380, windows=380), sidebar_max=self._sidebar_max_width(),
-            )
+        window_layout.fit_to_screen(
+            self, self._main_splitter, self._preview_splitter,
+            sidebar_ratio=pick(mac=0.34, windows=0.32), sidebar_min=pick(mac=380, windows=380), sidebar_max=self._sidebar_max_width(),
+        )
+        window_layout.restore(self, self._main_splitter, self._preview_splitter)
         # The sidebar always opens narrow so the 3D view gets the room.
         splitter = self._main_splitter
         total = sum(splitter.sizes())
@@ -1631,6 +1717,82 @@ class MainWindow(QMainWindow):
         self._properties_preview_pending = False
         self._properties_debounce.stop()
 
+    def _wants_gpu_components(self) -> bool:
+        """GPU (CUDA) is selected, but the installed AI components are the CPU
+        version and the GPU version can be downloaded."""
+        from core import ai_runtime
+
+        return (
+            ai_runtime.is_frozen()
+            and self.height_panel.selected_device() == "cuda"
+            and "cuda" in ai_runtime.variants()
+            and ai_runtime.installed_variant() == "cpu"
+        )
+
+    def _ask_switch_to_gpu(self):
+        """'cuda' to download the GPU components, False to stop."""
+        from core import ai_runtime
+
+        size = ai_runtime.download_size("cuda")
+        answer = QMessageBox.question(
+            self,
+            "Download GPU components?",
+            "GPU (CUDA) is selected, but the installed AI components are the CPU version.\n\n"
+            f"Download the NVIDIA GPU version ({_size_text(size)})? It replaces the CPU version. "
+            "Or select Auto or CPU under Device.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        return "cuda" if answer == QMessageBox.StandardButton.Yes else False
+
+    def _ask_ai_variant(self):
+        """Ask before the first download. Returns the variant to download
+        ('cpu', 'cuda', or None when the build has one kind only) or False."""
+        from core import ai_runtime
+
+        intro = (
+            "Generating maps needs the depth-estimation components (PyTorch and the model runtime), "
+            "which are downloaded once."
+        )
+        outro = "The depth model itself is downloaded separately the first time you use it."
+        options = ai_runtime.variants()
+        gpu = ai_runtime.nvidia_gpu() if "cuda" in options else None
+        if not gpu:
+            variant = "cpu" if options else None
+            answer = QMessageBox.question(
+                self,
+                "Download AI components?",
+                f"{intro} Size: about {_size_text(ai_runtime.download_size(variant))}.\n\n{outro}\n\nDownload now?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            return variant if answer == QMessageBox.StandardButton.Yes else False
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("Download AI components?")
+        box.setText("Download the AI components?")
+        box.setInformativeText(
+            f"{intro}\n\n{gpu} found. The GPU version runs the depth models many times "
+            "faster on it; the CPU version is a much smaller download.\n\n"
+            f"{outro}"
+        )
+        gpu_button = box.addButton(
+            f"GPU Version ({_size_text(ai_runtime.download_size('cuda'))})", QMessageBox.ButtonRole.AcceptRole
+        )
+        cpu_button = box.addButton(
+            f"CPU Version ({_size_text(ai_runtime.download_size('cpu'))})", QMessageBox.ButtonRole.AcceptRole
+        )
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(gpu_button)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is gpu_button:
+            return "cuda"
+        if clicked is cpu_button:
+            return "cpu"
+        return False
+
     def _ensure_ai_runtime(self, then) -> bool:
         """True when the depth models can run now. Otherwise offers to download
         the AI components (packaged app only) and calls `then` once they are in."""
@@ -1640,28 +1802,27 @@ class MainWindow(QMainWindow):
             if ai_runtime.is_frozen() and not ai_runtime.activate():
                 QMessageBox.critical(self, "AI components missing", "This build cannot load the depth models.")
                 return False
-            return True
-        size_mb = ai_runtime.download_size() / 1e6
-        answer = QMessageBox.question(
-            self,
-            "Download AI components?",
-            "Generating maps needs the depth-estimation components (PyTorch and the model runtime), "
-            f"which are downloaded once: about {size_mb:.0f} MB.\n\n"
-            "The depth model itself is downloaded separately the first time you use it.\n\nDownload now?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
+            if not self._wants_gpu_components():
+                return True
+            variant = self._ask_switch_to_gpu()
+        else:
+            variant = self._ask_ai_variant()
+        if variant is False:
             return False
+        # The depth model's process uses the installed components; stop it so
+        # the next run starts on the new ones.
+        if self.estimator is not None:
+            self.estimator.unload()
+            self.estimator = None
 
         dialog = OperationProgressDialog(
             "Downloading AI Components", "Connecting…", parent=self, cancellable=True
         )
-        worker = AIRuntimeInstallWorker(self)
+        worker = AIRuntimeInstallWorker(variant, self)
         state = {"ok": False, "error": None}
 
         def on_progress(done: int, total: int, message: str) -> None:
-            dialog.set_status(f"{message} {done / 1e6:.0f} / {total / 1e6:.0f} MB" if total else message)
+            dialog.set_status(f"{message} {_size_text(done, total)} / {_size_text(total)}" if total else message)
             dialog.set_progress(done // 1024, max(1, total // 1024) if total else 0)
 
         def on_ok() -> None:

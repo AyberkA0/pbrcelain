@@ -24,7 +24,7 @@ import sys
 import time
 from typing import Optional
 
-COMMANDS = ("generate", "settings", "models")
+COMMANDS = ("generate", "settings", "models", "version")
 MAP_NAMES = ("height", "normal", "roughness", "ao", "curvature")
 DEVICES = ("auto", "cpu", "mps", "cuda")
 
@@ -132,21 +132,32 @@ def cmd_models(_args) -> dict:
     return {"ok": True, "models": models, "devices": list(DEVICES), "default": {"model": "Depth Anything V2", "size": "Small", "device": "auto"}}
 
 
-def _ensure_ai_runtime() -> None:
+def _ensure_ai_runtime(device: str) -> None:
+    """Download the AI components when missing: the GPU version when an NVIDIA
+    card is present (unless --device cpu), else the CPU version. With
+    --device cuda and the CPU version installed, the GPU version replaces it."""
     from core import ai_runtime
 
+    variant = None
     if ai_runtime.needs_download():
-        size = ai_runtime.download_size() / 1e6
-        _log(f"Downloading AI components ({size:.0f} MB, once)…")
-        last = [0.0]
+        variant = "cpu" if device == "cpu" and "cpu" in ai_runtime.variants() else ai_runtime.default_variant()
+    elif ai_runtime.is_frozen() and device == "cuda" and "cuda" in ai_runtime.variants() \
+            and ai_runtime.installed_variant() == "cpu":
+        variant = "cuda"
+    else:
+        ai_runtime.activate()
+        return
+    size = ai_runtime.download_size(variant) / 1e6
+    kind = f" ({ai_runtime.variants()[variant].label})" if variant else ""
+    _log(f"Downloading AI components{kind}, {size:.0f} MB, once…")
+    last = [0.0]
 
-        def progress(done, total, text):
-            if total and time.time() - last[0] > 2:
-                last[0] = time.time()
-                _log(f"{text} {done / total * 100:.0f}%")
+    def progress(done, total, text):
+        if total and time.time() - last[0] > 2:
+            last[0] = time.time()
+            _log(f"{text} {done / total * 100:.0f}%")
 
-        ai_runtime.install(progress=progress)
-    ai_runtime.activate()
+    ai_runtime.install(progress=progress, variant=variant)
 
 
 def _estimate_depth(albedo, panels, args):
@@ -168,7 +179,7 @@ def _estimate_depth(albedo, panels, args):
             source = apply_force_seamless_blur(source, tile_box, blur_pct=0.03)
         seamless_size = albedo.size
 
-    _ensure_ai_runtime()
+    _ensure_ai_runtime(device)
     try:
         estimator = DepthEstimator(family, variant, device)
     except ValueError as exc:
@@ -304,6 +315,12 @@ def cmd_generate(args) -> dict:
     return {"ok": True, "outputs": outputs, **info}
 
 
+def cmd_version(args) -> dict:
+    from core.version import VERSION
+
+    return {"ok": True, "version": VERSION}
+
+
 # -- entry ----------------------------------------------------------------------
 
 class _Parser(argparse.ArgumentParser):
@@ -342,6 +359,7 @@ def _parser() -> argparse.ArgumentParser:
 
     sub.add_parser("settings", help="Print every setting with the app's defaults, as JSON usable with --settings.")
     sub.add_parser("models", help="List depth models, sizes, devices and licenses.")
+    sub.add_parser("version", help="Print the PBRCELAIN version.")
     return parser
 
 
@@ -355,7 +373,7 @@ def run(argv: list[str]) -> int:
     except CliError as exc:
         _emit({"ok": False, "error": str(exc)})
         return 1
-    handlers = {"generate": cmd_generate, "settings": cmd_settings, "models": cmd_models}
+    handlers = {"generate": cmd_generate, "settings": cmd_settings, "models": cmd_models, "version": cmd_version}
     # Library chatter (print() from model loading) must not pollute the JSON on stdout.
     real_stdout = sys.stdout
     sys.stdout = sys.stderr

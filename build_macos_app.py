@@ -39,14 +39,10 @@ def _find_python() -> str:
 
 
 def _version() -> str:
-    try:
-        out = subprocess.run(
-            ["git", "-C", PROJECT_DIR, "rev-list", "--count", "HEAD"],
-            capture_output=True, text=True, check=True,
-        ).stdout.strip()
-        return f"1.0.{out}"
-    except (OSError, subprocess.CalledProcessError):
-        return "1.0"
+    sys.path.insert(0, PROJECT_DIR)
+    from core.version import VERSION
+
+    return VERSION
 
 
 def _info_plist() -> dict:

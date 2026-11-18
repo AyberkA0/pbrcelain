@@ -524,7 +524,10 @@ from PyQt6.QtCore import QObject as _QObject, pyqtSignal as _pyqtSignal
 
 IS_MAC = _sys.platform == "darwin"
 IS_WINDOWS = _sys.platform == "win32"
-PLATFORM_THEME = "mac" if IS_MAC else ("windows" if IS_WINDOWS else "legacy")
+# Windows uses the macOS look too (same theme, fonts and window buttons), so the
+# app looks the same everywhere. IS_MAC / IS_WINDOWS still pick native behaviour.
+PLATFORM_THEME = "mac" if (IS_MAC or IS_WINDOWS) else "legacy"
+MAC_LOOK = PLATFORM_THEME == "mac"
 
 
 def pick(mac, windows, legacy=None):

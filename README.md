@@ -56,9 +56,10 @@ Materials generated from single photos, previewed in the built-in 3D viewport.
 
 Ready-to-run builds for **macOS (Apple Silicon)** and **Windows (64-bit)** are on the
 [Releases page](https://github.com/AyberkA0/pbrcelain/releases) — no Python needed.
-The app itself is a small download; the AI components (about 160 MB) are
-downloaded once, the first time you generate a Height map. The Windows build runs
-depth models on the CPU; for NVIDIA GPU acceleration, [run it from source](docs/DEVELOPMENT.md).
+The app itself is a small download; the AI components are downloaded once, the
+first time you generate a Height map. On Windows with an NVIDIA graphics card you
+can pick the GPU (CUDA) version, about 2 GB, which runs the depth models much
+faster; the CPU version is about 180 MB. On a Mac they run on the GPU (about 160 MB).
 
 ### First launch on macOS
 
@@ -126,6 +127,7 @@ No extra setup: it is the same app binary (on macOS,
 - [Command line](docs/CLI.md): generating maps from scripts and AI agents.
 - [Running from source](docs/DEVELOPMENT.md): installing with Python, GPU setup,
   file associations and project file details.
+- [Changelog](CHANGELOG.md): what changed in each version.
 
 ## License
 

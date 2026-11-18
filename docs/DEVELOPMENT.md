@@ -1,6 +1,6 @@
 # Running from source
 
-For contributors and anyone who wants GPU acceleration on Windows. Ready-made builds are on the [Releases page](https://github.com/AyberkA0/pbrcelain/releases).
+For contributors. Ready-made builds (with NVIDIA GPU support on Windows) are on the [Releases page](https://github.com/AyberkA0/pbrcelain/releases).
 
 ## Installation
 

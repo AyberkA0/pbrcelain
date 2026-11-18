@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.theme import IS_MAC
+from ui.theme import MAC_LOOK
 from ui.value_controls import attach_scrub, find_spin, set_quietly, slider_field
 
 
@@ -65,7 +65,7 @@ class PreviewPropertiesPanel(QWidget):
         tabs_row.setContentsMargins(6, 2, 6, 4)
         tabs_row.setSpacing(2)
         tab_host_layout = tabs_row
-        if IS_MAC:
+        if MAC_LOOK:
             tabs_row.setContentsMargins(14, 2, 14, 4)
             segment = QWidget()
             segment.setObjectName("SubtabBar")
@@ -110,7 +110,7 @@ class PreviewPropertiesPanel(QWidget):
             page_layout.addStretch(1)
             scroll.setWidget(page)
             self._stack.addWidget(scroll)
-        if not IS_MAC:
+        if not MAC_LOOK:
             tabs_row.addStretch(1)
 
         # When the 3D view is too narrow for every tab name, a drop-down takes

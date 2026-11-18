@@ -96,6 +96,9 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("PBRCELAIN")
     app.setOrganizationName("PBRCELAIN")
+    from core.version import VERSION
+
+    app.setApplicationVersion(VERSION)
     apply_app_theme(app)
     install_wheel_guard(app)
 
@@ -114,7 +117,13 @@ def main() -> int:
     if project_path is not None:
         QTimer.singleShot(0, lambda: window._load_project_from_path(project_path))
 
-    return app.exec()
+    code = app.exec()
+    # Destroy the window while Python is still fully alive: on Windows its
+    # native-event hook would otherwise run during interpreter shutdown and crash.
+    from PyQt6 import sip
+
+    sip.delete(window)
+    return code
 
 
 if __name__ == "__main__":

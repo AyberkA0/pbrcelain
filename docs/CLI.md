@@ -16,8 +16,11 @@ the same as the app's: the defaults and setting names come from the app itself.
 The examples below write `pbrcelain` for whichever of these applies.
 
 The first `generate` that needs the AI depth model downloads the AI components
-(about 160 MB, packaged app only) and the model from Hugging Face. Both are
-cached for later runs.
+(packaged app only) and the model from Hugging Face. Both are cached for later
+runs. On Windows with an NVIDIA graphics card the GPU (CUDA) version of the
+components is downloaded (about 2 GB), otherwise the CPU version; `--device cpu`
+or `PBRCELAIN_AI_VARIANT=cpu` picks the CPU version, and `--device cuda` replaces
+an installed CPU version with the GPU one.
 
 ## Commands
 

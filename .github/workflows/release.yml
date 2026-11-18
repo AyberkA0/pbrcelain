@@ -1,23 +1,17 @@
-name: Release
+name: Release builds
 
+# Builds the release files on GitHub's machines and keeps them as workflow
+# artifacts. Releases themselves are published by hand (docs/RELEASING.md);
+# the version comes from core/version.py.
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-14
-            asset: PBRCELAIN-macOS-AppleSilicon.dmg
-          - os: windows-latest
-            asset: PBRCELAIN-Windows-x64.zip
+        os: [macos-14, windows-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -27,15 +21,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Set version
-        shell: bash
-        run: |
-          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            echo "PBRCELAIN_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
-          else
-            echo "PBRCELAIN_VERSION=0.0.0" >> "$GITHUB_ENV"
-          fi
-
+      # On Windows PyTorch is not part of the AI pack: the app downloads the
+      # official CPU or CUDA wheel itself. The CPU build installed here only
+      # sets the PyTorch version and pulls in its dependencies for the pack.
       - name: Install PyTorch (CPU build)
         if: runner.os == 'Windows'
         run: python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
@@ -45,76 +33,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller
 
-      - name: Build macOS icon
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p build
-          python -c "from build_macos_app import _build_icns; _build_icns('build/PBRCELAIN.icns')"
-
-      - name: Build AI runtime pack
-        shell: bash
-        env:
-          PBRCELAIN_RELEASE_TAG: ${{ github.ref_name }}
-        run: python build_ai_runtime.py "$PBRCELAIN_VERSION"
-
-      - name: Build app
-        run: python -m PyInstaller --noconfirm pbrcelain.spec
-
-      - name: Package (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p dmg
-          cp -R dist/PBRCELAIN.app dmg/
-          ln -s /Applications dmg/Applications
-          hdiutil create -volname PBRCELAIN -srcfolder dmg -format ULMO "${{ matrix.asset }}"
-
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: Compress-Archive -Path dist/PBRCELAIN -DestinationPath "${{ matrix.asset }}"
+      - name: Build
+        run: python build_release.py
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset }}
-          path: |
-            ${{ matrix.asset }}
-            build/PBRCELAIN-ai-runtime-*.zip
+          name: release-${{ runner.os }}
+          path: release/*
           compression-level: 0
-
-  release:
-    needs: build
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: assets
-          merge-multiple: true
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            assets/**/*.zip
-            assets/**/*.dmg
-          body: |
-            ## Downloads
-
-            | Platform | File |
-            | --- | --- |
-            | macOS (Apple Silicon, M1 and later) | `PBRCELAIN-macOS-AppleSilicon.dmg` |
-            | Windows 10/11 (64-bit) | `PBRCELAIN-Windows-x64.zip` |
-
-            No Python installation needed. Depth models are downloaded from Hugging Face
-            on first use (about 100 MB for Depth Anything V2 Small, up to a few GB for the
-            larger models) and cached for later runs.
-
-            **macOS:** open the DMG and drag `PBRCELAIN.app` to Applications. The app is not
-            notarized, so on first launch right-click it and choose **Open**. If macOS says
-            the app is damaged, run `xattr -dr com.apple.quarantine /Applications/PBRCELAIN.app`
-            once. Depth estimation runs on the GPU (Metal/MPS).
-
-            **Windows:** unzip anywhere and run `PBRCELAIN.exe`. SmartScreen may ask for
-            confirmation (**More info → Run anyway**) since the build is unsigned. This build
-            uses the CPU version of PyTorch to stay within download limits; for NVIDIA GPU
-            acceleration, run from source with the CUDA build of PyTorch (see the README).

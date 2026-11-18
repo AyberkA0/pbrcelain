@@ -364,6 +364,10 @@ class AIRuntimeInstallWorker(QThread):
     finished_ok = pyqtSignal()
     failed = pyqtSignal(str)
 
+    def __init__(self, variant=None, parent=None):
+        super().__init__(parent)
+        self.variant = variant
+
     def run(self) -> None:
         from core import ai_runtime
 
@@ -371,6 +375,7 @@ class AIRuntimeInstallWorker(QThread):
             ai_runtime.install(
                 progress=lambda done, total, msg: self.progress.emit(done, total, msg),
                 cancelled=self.isInterruptionRequested,
+                variant=self.variant,
             )
             self.finished_ok.emit()
         except InterruptedError:

@@ -685,6 +685,11 @@ QWidget#StatusBarPanel {{
     background-color: {t["layer"]};
 }}
 
+#TitleBarSpace {{
+    background-color: {t["window"]};
+    border-bottom: 1px solid {t["divider"]};
+}}
+
 #DynamicPanelHost, #PreviewPropertiesPanel, #MapInspector {{
     background-color: transparent;
     border: none;

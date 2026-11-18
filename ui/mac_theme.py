@@ -689,6 +689,33 @@ QWidget#StatusBarPanel {{
 _installed = False
 
 
+_FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "fonts")
+
+
+def _ui_font():
+    """San Francisco on macOS. Elsewhere SF cannot be shipped (Apple's licence),
+    so the bundled Inter, the closest open font, at the same pixel size."""
+    import sys
+
+    if sys.platform == "darwin":
+        font = QFontDatabase.systemFont(QFontDatabase.SystemFont.GeneralFont)
+        font.setPointSize(12)  # 12 pt is 12 px on macOS
+        return font
+    from PyQt6.QtGui import QFont
+
+    family = None
+    for weight in ("Regular", "Light", "Medium", "SemiBold", "Bold"):
+        font_id = QFontDatabase.addApplicationFont(os.path.join(_FONT_DIR, f"Inter-{weight}.ttf"))
+        families = QFontDatabase.applicationFontFamilies(font_id) if font_id >= 0 else []
+        family = family or (families[0] if families else None)
+    font = QFont(family or "Segoe UI")
+    font.setPixelSize(12)
+    # macOS renders text unhinted; match it so letter shapes and spacing agree.
+    font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
+    font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+    return font
+
+
 def _apply_current(app: QApplication) -> None:
     app.setStyleSheet(build_stylesheet(tokens(), accent_color()))
     theme_changed.emit()
@@ -698,9 +725,7 @@ def apply(app: QApplication) -> None:
     global _installed
     app.setStyle("Fusion")
 
-    font = QFontDatabase.systemFont(QFontDatabase.SystemFont.GeneralFont)
-    font.setPointSize(12)
-    app.setFont(font)
+    app.setFont(_ui_font())
 
     _apply_current(app)
 
@@ -708,3 +733,12 @@ def apply(app: QApplication) -> None:
         _installed = True
         app.styleHints().colorSchemeChanged.connect(lambda _scheme: _apply_current(app))
         combo_popup.install(app)
+        import sys
+
+        if sys.platform == "win32":
+            # Dialogs keep the native Windows title bar; make it follow dark mode.
+            from ui import windows_theme
+
+            global _dialog_title_filter
+            _dialog_title_filter = windows_theme._TitleBarFilter(app)
+            app.installEventFilter(_dialog_title_filter)

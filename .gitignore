@@ -6,3 +6,4 @@ height_maps/
 build/
 dist/
 ai_runtime.json
+release/

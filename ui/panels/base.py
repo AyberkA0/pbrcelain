@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.theme import IS_MAC, PLATFORM_THEME, pick
+from ui.theme import MAC_LOOK, PLATFORM_THEME, pick
 from ui.value_controls import Knob, attach_scrub, find_spin, slider_field, wants_slider
 from ui.widgets import FoldArrow
 
@@ -352,7 +352,7 @@ class GeneratePropertiesContainer(QWidget):
 
         tabs_row = QHBoxLayout()
         tabs_row.setContentsMargins(6, 6, 6, 0)
-        if IS_MAC:
+        if MAC_LOOK:
             tabs_row.setContentsMargins(14, 4, 14, 2)
             segment = QWidget()
             segment.setObjectName("SubtabBar")
@@ -368,7 +368,7 @@ class GeneratePropertiesContainer(QWidget):
         self.generate_tab_btn.setChecked(True)
         self.generate_tab_btn.clicked.connect(lambda: self.select_page("generate"))
         self.properties_tab_btn.clicked.connect(lambda: self.select_page("properties"))
-        if IS_MAC:
+        if MAC_LOOK:
             segment_layout.addWidget(self.generate_tab_btn)
             segment_layout.addWidget(self.properties_tab_btn)
             tabs_row.addWidget(segment, 1)

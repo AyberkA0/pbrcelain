@@ -7,7 +7,8 @@ import importlib.util
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 APP_NAME = "PBRCELAIN"
-VERSION = os.environ.get("PBRCELAIN_VERSION", "1.0.0")
+sys.path.insert(0, os.path.abspath("."))
+from core.version import VERSION  # noqa: E402
 IS_MAC = sys.platform == "darwin"
 IS_WINDOWS = sys.platform == "win32"
 
@@ -85,6 +86,29 @@ pyz = PYZ(a.pure)
 
 icon = "build/PBRCELAIN.icns" if IS_MAC else "ui/assets/app_icon.ico"
 
+
+def _windows_version_info():
+    """File and product version shown in the .exe's Properties on Windows."""
+    from PyInstaller.utils.win32.versioninfo import (
+        FixedFileInfo, StringFileInfo, StringStruct, StringTable, VarFileInfo, VarStruct, VSVersionInfo,
+    )
+
+    numbers = tuple(int(part) for part in VERSION.split(".")) + (0,)
+    strings = [
+        StringStruct("ProductName", APP_NAME),
+        StringStruct("FileDescription", APP_NAME),
+        StringStruct("FileVersion", VERSION),
+        StringStruct("ProductVersion", VERSION),
+        StringStruct("InternalName", APP_NAME),
+        StringStruct("OriginalFilename", f"{APP_NAME}.exe"),
+        StringStruct("LegalCopyright", "GNU General Public License v3.0"),
+    ]
+    return VSVersionInfo(
+        ffi=FixedFileInfo(filevers=numbers[:4], prodvers=numbers[:4]),
+        kids=[StringFileInfo([StringTable("040904B0", strings)]), VarFileInfo([VarStruct("Translation", [1033, 1200])])],
+    )
+
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -95,6 +119,7 @@ exe = EXE(
     icon=icon,
     upx=False,
     target_arch="arm64" if IS_MAC else None,
+    version=_windows_version_info() if IS_WINDOWS else None,
 )
 
 coll = COLLECT(exe, a.binaries, a.datas, name=APP_NAME, upx=False)

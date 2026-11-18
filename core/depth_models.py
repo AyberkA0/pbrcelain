@@ -83,6 +83,15 @@ class DepthEstimator:
                 if torch.version.cuda is None
                 else "PyTorch was built with CUDA, but no usable NVIDIA GPU/driver was found"
             )
+            if getattr(sys, "frozen", False):
+                fix = (
+                    "Update the NVIDIA graphics driver and try again, or select 'Auto' / 'CPU'."
+                    if torch.version.cuda
+                    else "Download the GPU version of the AI components, or select 'Auto' / 'CPU'."
+                )
+                raise RuntimeError(
+                    f"GPU (CUDA) was selected but CUDA is not available.\n\n{hint} (torch {build}).\n\n{fix}"
+                )
             raise RuntimeError(
                 f"GPU (CUDA) was selected but CUDA is not available.\n\n"
                 f"{hint} (torch {build}).\n"
