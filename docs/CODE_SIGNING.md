@@ -7,8 +7,8 @@ pending; until it is approved, Windows releases are unsigned.
 
 ## What is signed
 
-Only release builds of PBRCELAIN for Windows (`PBRCELAIN-<version>-Windows-x64.zip`
-from the [Releases page](https://github.com/AyberkA0/pbrcelain/releases)). They
+Only release builds of PBRCELAIN for Windows (the installer
+`PBRCELAIN-<version>-Windows-x64-Setup.exe` and the program inside it, from the [Releases page](https://github.com/AyberkA0/pbrcelain/releases)). They
 are built from this repository's source by the GitHub Actions workflow
 [`.github/workflows/release.yml`](../.github/workflows/release.yml), and only those
 workflow builds are submitted for signing. Builds made anywhere else are never

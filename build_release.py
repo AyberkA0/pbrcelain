@@ -3,12 +3,13 @@
     python build_release.py
 
 macOS (Apple Silicon): PBRCELAIN-<version>-macOS-AppleSilicon.dmg
-Windows (x64):         PBRCELAIN-<version>-Windows-x64.zip
+Windows (x64):         PBRCELAIN-<version>-Windows-x64-Setup.exe (Inno Setup 6)
 both:                  the AI runtime pack PBRCELAIN-ai-runtime-…-v<version>.zip
 
 The version comes from core/version.py. Run it with the Python environment
 the app is built from (it needs PyInstaller and the AI libraries; on Windows
-the CPU build of PyTorch). See docs/RELEASING.md for the whole release.
+the CPU build of PyTorch, and Inno Setup 6 for the installer). See
+docs/RELEASING.md for the whole release.
 """
 
 from __future__ import annotations
@@ -18,7 +19,6 @@ import os
 import shutil
 import subprocess
 import sys
-import zipfile
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(ROOT, "release")
@@ -51,16 +51,33 @@ def build_macos() -> str:
     return dmg
 
 
+def _iscc() -> str:
+    """The Inno Setup compiler."""
+    candidates = [shutil.which("iscc"), shutil.which("ISCC")]
+    for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles"), os.environ.get("LOCALAPPDATA")):
+        if base:
+            candidates.append(os.path.join(base, "Inno Setup 6", "ISCC.exe"))
+            candidates.append(os.path.join(base, "Programs", "Inno Setup 6", "ISCC.exe"))
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    sys.exit("Inno Setup 6 is needed for the Windows installer: https://jrsoftware.org/isdl.php")
+
+
 def build_windows() -> str:
+    iscc = _iscc()
     run(sys.executable, "-m", "PyInstaller", "--noconfirm", "pbrcelain.spec")
-    archive = os.path.join(OUT, f"PBRCELAIN-{VERSION}-Windows-x64.zip")
-    source = os.path.join(ROOT, "dist", "PBRCELAIN")
-    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-        for folder, _dirs, files in os.walk(source):
-            for name in files:
-                path = os.path.join(folder, name)
-                zf.write(path, os.path.join("PBRCELAIN", os.path.relpath(path, source)))
-    return archive
+    setup = os.path.join(OUT, f"PBRCELAIN-{VERSION}-Windows-x64-Setup.exe")
+    if os.path.exists(setup):
+        os.remove(setup)
+    run(
+        iscc, "/Q",
+        f"/DAppVersion={VERSION}",
+        f"/DSourceDir={os.path.join(ROOT, 'dist', 'PBRCELAIN')}",
+        f"/DOutputDir={OUT}",
+        os.path.join(ROOT, "installer", "pbrcelain.iss"),
+    )
+    return setup
 
 
 def main() -> None:

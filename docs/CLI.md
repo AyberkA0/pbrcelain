@@ -10,7 +10,7 @@ the same as the app's: the defaults and setting names come from the app itself.
 | Installed as | Command |
 | --- | --- |
 | macOS app | `/Applications/PBRCELAIN.app/Contents/MacOS/PBRCELAIN <command> …` |
-| Windows app | `PBRCELAIN.exe <command> …` |
+| Windows app | `"%LOCALAPPDATA%\Programs\PBRCELAIN\PBRCELAIN.exe" <command> …` (installed for all users: `"%ProgramFiles%\PBRCELAIN\PBRCELAIN.exe"`) |
 | From source | `python main.py <command> …` |
 
 The examples below write `pbrcelain` for whichever of these applies.

@@ -3,7 +3,7 @@
 | Platform | File |
 | --- | --- |
 | macOS (Apple Silicon, M1 and later) | `PBRCELAIN-{version}-macOS-AppleSilicon.dmg` |
-| Windows 10/11 (64-bit) | `PBRCELAIN-{version}-Windows-x64.zip` |
+| Windows 10/11 (64-bit) | `PBRCELAIN-{version}-Windows-x64-Setup.exe` |
 
 No Python installation needed. The `PBRCELAIN-ai-runtime-…` files are downloaded
 by the app itself the first time you generate a Height map; you don't need to
@@ -16,8 +16,10 @@ Privacy & Security** and click **Open Anyway**. If macOS says the app is damaged
 run `xattr -dr com.apple.quarantine /Applications/PBRCELAIN.app` once. Depth
 estimation runs on the GPU (Metal/MPS).
 
-**Windows:** unzip anywhere and run `PBRCELAIN.exe`. SmartScreen may ask for
-confirmation (**More info › Run anyway**) since the build is unsigned. With an
+**Windows:** run the Setup and follow it; no admin rights needed. It adds
+PBRCELAIN to the Start menu and opens `.pcln` projects with it, and it can be
+removed from **Settings › Apps**. SmartScreen may ask for confirmation
+(**More info › Run anyway**) since the build is unsigned. With an
 NVIDIA graphics card, the app offers the GPU (CUDA) version of the AI components
 on first use (about 2 GB, downloaded from PyTorch); otherwise it downloads the CPU
 version (about 180 MB). Windows builds are to be signed with free code signing

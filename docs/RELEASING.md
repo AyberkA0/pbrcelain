@@ -13,7 +13,7 @@ bundle, the Windows `.exe` properties and the AI runtime pack all read it there.
    ```
 
    This writes the app (`PBRCELAIN-<version>-macOS-AppleSilicon.dmg` or
-   `PBRCELAIN-<version>-Windows-x64.zip`) and that platform's AI runtime pack
+   `PBRCELAIN-<version>-Windows-x64-Setup.exe`) and that platform's AI runtime pack
    into `release/`. The pack's download URL points at the `v<version>` release,
    so the version must not change between building and publishing.
 
@@ -35,7 +35,8 @@ Python as that platform's app.
 - **macOS (Apple Silicon):** Python with `requirements.txt` and `pyinstaller`.
 - **Windows (x64):** Python with the CPU build of PyTorch first
   (`pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu`),
-  then `requirements.txt` and `pyinstaller`. PyTorch itself is not put in the
+  then `requirements.txt` and `pyinstaller`, and [Inno Setup 6](https://jrsoftware.org/isdl.php)
+  for the installer (`installer/pbrcelain.iss`). PyTorch itself is not put in the
   pack: the manifest points at the official CPU and CUDA wheels on
   download.pytorch.org, and the app downloads the one the user picks.
 
