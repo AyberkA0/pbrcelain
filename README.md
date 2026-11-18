@@ -36,8 +36,8 @@ Materials generated from single photos, previewed in the built-in 3D viewport.
 </p>
 
 <p align="center">
-  <img src="docs/media/rusty-metal.gif" alt="Rusty painted metal on a plane and a cube" width="520"><br>
-  <em>Rusty painted metal, on a plane and a cube</em>
+  <img src="docs/media/strange-pebbles.gif" alt="Strange pebbles material rotating in the 3D viewport" width="520"><br>
+  <em>Strange pebbles</em>
 </p>
 
 <p align="center">
