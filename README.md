@@ -76,6 +76,17 @@ this in Terminal and open it again:
 xattr -dr com.apple.quarantine /Applications/PBRCELAIN.app
 ```
 
+## Getting started
+
+1. **Import a photo** into the Albedo slot (the one that pulses).
+2. Select the **Height** slot and click **Generate Height**. The first run
+   downloads the AI components and the depth model.
+3. Generate **Normal**, **Roughness** and **Ambient Occlusion** the same way, fine-tune them on the
+   **Adjustment** page, then use **Export** to write every map to a folder.
+
+Hover over any setting to see what it does. Projects are saved as `.pcln` files that
+keep everything, so you can reopen and keep adjusting without re-running the model.
+
 ## Which depth model?
 
 > [!IMPORTANT]
@@ -87,17 +98,6 @@ xattr -dr com.apple.quarantine /Applications/PBRCELAIN.app
 >   walls, planks and fabric.
 >
 > Switch it in **Height › Depth Model**. If a result looks off, try the other one.
-
-## Getting started
-
-1. **Import a photo** into the Albedo slot (the one that pulses).
-2. Select the **Height** slot and click **Generate Height**. The first run
-   downloads the AI components and the depth model.
-3. Generate **Normal**, **Roughness** and **Ambient Occlusion** the same way, fine-tune them on the
-   **Adjustment** page, then use **Export** to write every map to a folder.
-
-Hover over any setting to see what it does. Projects are saved as `.pcln` files that
-keep everything, so you can reopen and keep adjusting without re-running the model.
 
 ## 4K, 8K and beyond
 
