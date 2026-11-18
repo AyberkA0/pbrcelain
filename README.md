@@ -45,10 +45,6 @@ Materials generated from single photos, previewed in the built-in 3D viewport.
   <em>Porcelain</em>
 </p>
 
-<p align="center">
-  <sub>Source textures for the demos from <a href="https://polyhaven.com">Poly Haven</a> (CC0) — thank you!</sub>
-</p>
-
 ## Download
 
 Ready-to-run builds for **macOS (Apple Silicon)** and **Windows (64-bit)** are on the
