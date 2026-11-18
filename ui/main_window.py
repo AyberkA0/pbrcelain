@@ -163,8 +163,10 @@ _SKIP_CHUNK_WARNING_KEY = "warnings/skip_chunk_estimation"
 # buttons in the top-right corner instead.
 _CUSTOM_TITLE_BAR = IS_MAC or IS_WINDOWS
 _TITLE_BAR_HEIGHT = mac_window.TITLE_BAR_HEIGHT
-# First title icon: right of the macOS window buttons, or at the left edge on Windows.
-_TITLE_ICONS_LEFT = 6 if IS_WINDOWS else 78 + mac_window.WINDOW_BUTTONS_SHIFT
+# First title icon: right of the macOS window buttons, or at the left edge on
+# Windows and in macOS full screen (where macOS hides the window buttons).
+_TITLE_ICONS_LEFT_EDGE = 6
+_TITLE_ICONS_LEFT_MAC = 78 + mac_window.WINDOW_BUTTONS_SHIFT
 MAP_WELL_HEIGHT = 150
 
 RECENT_PROJECTS_KEY = "recentProjects"
@@ -275,6 +277,11 @@ class MainWindow(QMainWindow):
         for btn, icon in getattr(self, "_title_buttons", []):
             btn.setIcon(subtle_icon(icon))
 
+    def _title_icons_left(self) -> int:
+        if IS_MAC and not self.isFullScreen():
+            return _TITLE_ICONS_LEFT_MAC
+        return _TITLE_ICONS_LEFT_EDGE
+
     def _style_title_pill(self, floating: bool | None = None) -> None:
         pill = getattr(self, "_title_pill", None)
         if pill is None:
@@ -288,10 +295,10 @@ class MainWindow(QMainWindow):
         title_row = pill.parentWidget().layout()
         if floating:
             title_row.setContentsMargins(0, 0, 14, 0)
-            pill.layout().setContentsMargins(_TITLE_ICONS_LEFT, 0, 6, 0)
+            pill.layout().setContentsMargins(self._title_icons_left(), 0, 6, 0)
             pill.setMinimumHeight(_TITLE_BAR_HEIGHT)
         else:
-            title_row.setContentsMargins(_TITLE_ICONS_LEFT, 0, 14, 1)
+            title_row.setContentsMargins(self._title_icons_left(), 0, 14, 1)
             pill.layout().setContentsMargins(0, 0, 0, 0)
             pill.setMinimumHeight(0)
         if floating:
@@ -566,7 +573,7 @@ class MainWindow(QMainWindow):
             title_space.setFixedHeight(_TITLE_BAR_HEIGHT)
             self._install_drag_area(title_space)
             title_row = QHBoxLayout(title_space)
-            title_row.setContentsMargins(_TITLE_ICONS_LEFT, 0, 14, 1)
+            title_row.setContentsMargins(self._title_icons_left(), 0, 14, 1)
             title_row.setSpacing(0)
             # The buttons sit in a pill that is invisible while the sidebar is
             # shown and gets the floating-panel background when it is hidden.
@@ -1114,8 +1121,22 @@ class MainWindow(QMainWindow):
             return False, 0
         return super().nativeEvent(event_type, message)
 
+    def _relayout_title_bar(self) -> None:
+        """Move the title icons for full screen (where macOS hides the window
+        buttons) or back next to the buttons."""
+        self._style_title_pill()
+        title = getattr(self, "_title_space", None)
+        splitter = getattr(self, "_main_splitter", None)
+        if title is None or splitter is None:
+            return
+        if splitter.widget(0).isHidden():  # floating over the 3D view
+            title.layout().activate()
+            title.setGeometry(0, 0, title.sizeHint().width(), title.height())
+
     def _center_window_buttons(self) -> None:
-        if IS_MAC:
+        # In full screen macOS shows the buttons in its own bar when the
+        # pointer reaches the top; those are left alone.
+        if IS_MAC and not self.isFullScreen():
             mac_window.center_window_buttons(self)
             # AppKit lays the buttons out again after some changes; win the race.
             QTimer.singleShot(0, lambda: mac_window.center_window_buttons(self))
@@ -1124,6 +1145,8 @@ class MainWindow(QMainWindow):
         super().changeEvent(event)
         if event.type() in (QEvent.Type.WindowStateChange, QEvent.Type.ActivationChange):
             self._center_window_buttons()
+        if IS_MAC and event.type() == QEvent.Type.WindowStateChange:
+            self._relayout_title_bar()
         if getattr(self, "_caption_buttons", None) is not None and event.type() in (
             QEvent.Type.WindowStateChange, QEvent.Type.ActivationChange
         ):
