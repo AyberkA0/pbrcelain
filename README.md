@@ -76,6 +76,18 @@ this in Terminal and open it again:
 xattr -dr com.apple.quarantine /Applications/PBRCELAIN.app
 ```
 
+## Which depth model?
+
+> [!IMPORTANT]
+> The right model makes the biggest difference to the result.
+>
+> - **Depth Anything V2**: deep, uneven surfaces with lots of relief, like pebbles,
+>   gravel, rocks, bark and rubble.
+> - **Marigold**: flatter, regular, patterned surfaces, like tiles, pavers, brick
+>   walls, planks and fabric.
+>
+> Switch it in **Height › Depth Model**. If a result looks off, try the other one.
+
 ## Getting started
 
 1. **Import a photo** into the Albedo slot (the one that pulses).
@@ -87,30 +99,12 @@ xattr -dr com.apple.quarantine /Applications/PBRCELAIN.app
 Hover over any setting to see what it does. Projects are saved as `.pcln` files that
 keep everything, so you can reopen and keep adjusting without re-running the model.
 
-## 4K, 8K and beyond: why not just ask an image AI?
+## 4K, 8K and beyond
 
-You can ask a general image AI to "make a height map of this photo", and it will
-draw something that looks like one. But it works at a fixed, small output size, so
-a 4K or 8K photo comes back downscaled and its fine relief is lost, and a picture
-that only *looks* plausible is not a measured depth estimate.
-
-PBRCELAIN combines the two approaches. **More Detail with Chunks** runs a dedicated
-depth model over the photo in overlapping chunks at the model's native resolution,
-then blends them into one map guided by a full-image pass. The output resolution
-therefore follows your photo, with no upper limit, as with classic filter-based
-height map tools, while the relief comes from an AI depth model and is far more
-accurate than what those filters can infer. A 4K photo gives a 4K height map, an 8K
-photo an 8K one.
-
-## Which depth model?
-
-- **Depth Anything V2** for deep, uneven surfaces with lots of relief: pebbles,
-  gravel, rocks, bark, rubble.
-- **Marigold** for flatter, more regular surfaces with a pattern: tiles, pavers,
-  brick walls, planks, fabric.
-
-Both are one click away in **Height › Depth Model**; if a result looks off, try the
-other one.
+General image AIs work at a small, fixed output size, so a 4K or 8K photo loses its
+fine relief. PBRCELAIN's **More Detail with Chunks** runs the depth model over the
+photo in overlapping chunks, so the height map keeps your photo's full resolution,
+with no upper limit, and stays as accurate as the AI model.
 
 ## Use from scripts and AI agents
 
