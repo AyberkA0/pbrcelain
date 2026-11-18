@@ -41,8 +41,8 @@ Materials generated from single photos, previewed in the built-in 3D viewport.
 </p>
 
 <p align="center">
-  <img src="docs/media/cracked-stone.gif" alt="Cracked stone ground material" width="520"><br>
-  <em>Cracked stone</em>
+  <img src="docs/media/porcelain.gif" alt="Broken blue-and-white porcelain tiles rotating in the 3D viewport" width="520"><br>
+  <em>Porcelain</em>
 </p>
 
 <p align="center">
