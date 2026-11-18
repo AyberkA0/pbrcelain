@@ -7,7 +7,7 @@ from typing import Optional
 import numpy as np
 from PIL import Image
 from PyQt6.QtCore import QEvent, QSettings, QSize, QTimer, Qt
-from PyQt6.QtGui import QAction, QColor, QFont, QKeySequence, QImage, QPixmap
+from PyQt6.QtGui import QAction, QColor, QKeySequence, QImage, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -159,12 +159,12 @@ _GENERATE_SOURCE = {
 SIDEBAR_START_WIDTH = 370
 _SKIP_CHUNK_WARNING_KEY = "warnings/skip_chunk_estimation"
 # Our own title bar on both systems. On macOS the native window buttons sit in
-# the top-left corner; the frameless Windows window shows the app name there and
-# draws Windows caption buttons in the top-right corner.
+# the top-left corner; the frameless Windows window draws Windows caption
+# buttons in the top-right corner instead.
 _CUSTOM_TITLE_BAR = IS_MAC or IS_WINDOWS
 _TITLE_BAR_HEIGHT = mac_window.TITLE_BAR_HEIGHT
-# First title item: right of the macOS window buttons, or the app name on Windows.
-_TITLE_ICONS_LEFT = 12 if IS_WINDOWS else 78
+# First title icon: right of the macOS window buttons, or at the left edge on Windows.
+_TITLE_ICONS_LEFT = 6 if IS_WINDOWS else 78
 MAP_WELL_HEIGHT = 150
 
 RECENT_PROJECTS_KEY = "recentProjects"
@@ -578,15 +578,6 @@ class MainWindow(QMainWindow):
             title_row.addWidget(pill, 0, Qt.AlignmentFlag.AlignVCenter)
             self._title_pill = pill
             self._style_title_pill()
-            if IS_WINDOWS:
-                app_name = QLabel("PBRCELAIN")
-                app_name.setObjectName("TitleAppName")
-                name_font = app_name.font()
-                name_font.setWeight(QFont.Weight.DemiBold)
-                name_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.6)
-                app_name.setFont(name_font)
-                pill_row.addWidget(app_name)
-                pill_row.addSpacing(8)
             self._title_buttons = []
             for icon, tip, slot in (
                 ("sidebar", "Show or hide the sidebar", self._toggle_sidebar),
