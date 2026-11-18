@@ -7,8 +7,8 @@ from typing import Optional
 import numpy as np
 from OpenGL import GL as gl
 from PIL import Image
-from PyQt6.QtCore import QTimer, Qt, pyqtSignal
-from PyQt6.QtGui import QSurfaceFormat
+from PyQt6.QtCore import QEasingCurve, QPointF, QTimer, QVariantAnimation, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen, QPolygonF, QSurfaceFormat
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
 from ui import trackpad
@@ -402,6 +402,17 @@ class Preview3DWidget(QOpenGLWidget):
         self._last_mouse_pos = None
         self._is_dragging = False
 
+        # Pivot gizmo: arrows to move the pivot like an object's position.
+        self._gizmo_visible = False
+        self._gizmo_hover: Optional[int] = None     # axis under the pointer
+        self._gizmo_axis: Optional[int] = None      # handle being dragged (0-2 axes, 3-5 planes)
+        self._gizmo_hit0: Optional[np.ndarray] = None
+        self._gizmo_pos: Optional[np.ndarray] = None  # where it is drawn while dragged
+        self._gizmo_drag_start: Optional[np.ndarray] = None
+        self._gizmo_drag_t0 = 0.0
+        self._gizmo_camera = None                   # camera frozen during a drag
+        self._pivot_anim: Optional[QVariantAnimation] = None
+
         self._settings = {
             "mesh": "plane",
             "fov": 75.0,
@@ -711,7 +722,270 @@ class Preview3DWidget(QOpenGLWidget):
             self._azimuth = (self._azimuth + self._settings.get("auto_rotate_speed", 1.0) * ROTATION_STEP) % 360.0
             self.update()
 
+    # -- camera ---------------------------------------------------------------
+
+    def _pivot(self) -> np.ndarray:
+        return np.array([
+            self._settings.get("pivot_x", 0.0),
+            self._settings.get("pivot_y", 0.0),
+            self._settings.get("pivot_z", 0.0),
+        ], dtype=np.float64)
+
+    def _camera(self) -> dict:
+        """Camera position and row-major view/projection matrices."""
+        aspect = max(self.width(), 1) / max(self.height(), 1)
+        fov = self._settings.get("fov", 45.0)
+        distance = self._settings.get("distance", 3.5)
+        az = math.radians(self._azimuth)
+        el = math.radians(self._elevation)
+        offset = np.array([
+            distance * math.cos(el) * math.sin(az),
+            distance * math.sin(el),
+            distance * math.cos(el) * math.cos(az),
+        ])
+        pivot = self._pivot()
+        cam_pos = pivot + offset
+        view = _look_at(cam_pos.astype(np.float32), pivot.astype(np.float32), np.array([0.0, 1.0, 0.0], dtype=np.float32)).T
+        proj = _perspective(fov, aspect, 0.01, 100.0).T
+        return {"cam_pos": cam_pos, "view": view.astype(np.float64), "proj": proj.astype(np.float64), "fov": fov}
+
+    def _project(self, cam: dict, point: np.ndarray) -> Optional[QPointF]:
+        clip = cam["proj"] @ cam["view"] @ np.append(point, 1.0)
+        if clip[3] <= 1e-6:
+            return None
+        ndc = clip[:3] / clip[3]
+        return QPointF((ndc[0] + 1.0) * 0.5 * self.width(), (1.0 - ndc[1]) * 0.5 * self.height())
+
+    def _mouse_ray(self, cam: dict, pos: QPointF) -> tuple[np.ndarray, np.ndarray]:
+        x = 2.0 * pos.x() / max(self.width(), 1) - 1.0
+        y = 1.0 - 2.0 * pos.y() / max(self.height(), 1)
+        inverse = np.linalg.inv(cam["proj"] @ cam["view"])
+        near = inverse @ np.array([x, y, -1.0, 1.0])
+        far = inverse @ np.array([x, y, 1.0, 1.0])
+        near, far = near[:3] / near[3], far[:3] / far[3]
+        direction = far - near
+        return near, direction / max(np.linalg.norm(direction), 1e-12)
+
+    # -- pivot gizmo ----------------------------------------------------------
+
+    GIZMO_ARROW_PX = 78.0
+    GIZMO_PICK_PX = 9.0
+    # Plane squares: from this far along both axes, this big (share of the arrow).
+    GIZMO_PLANE_OFFSET = 0.16
+    GIZMO_PLANE_SIZE = 0.24
+    _GIZMO_AXES = (np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0]))
+    _GIZMO_COLORS = ("#e5484d", "#46a758", "#3e7bfa")
+    _GIZMO_ACTIVE = "#ffc53d"
+    # Handles 0-2 are the axis arrows; 3-5 the plane squares, each given as its
+    # two axes. A square takes the colour of the axis it is perpendicular to.
+    _GIZMO_PLANES = ((0, 1), (1, 2), (0, 2))   # XY, YZ, XZ
+    _GIZMO_PLANE_NORMAL = (2, 0, 1)
+    # Handle 6 is the dot in the middle: double-clicking it puts the pivot
+    # back at the origin.
+    _GIZMO_CENTER = 6
+    GIZMO_CENTER_PX = 7.0
+
+    def set_pivot_gizmo_visible(self, visible: bool) -> None:
+        """Show or hide the arrows that move the camera pivot."""
+        self._gizmo_visible = bool(visible)
+        self._gizmo_hover = None
+        self.setMouseTracking(self._gizmo_visible)
+        self.update()
+
+    def is_pivot_gizmo_visible(self) -> bool:
+        return self._gizmo_visible
+
+    def _gizmo_origin(self) -> np.ndarray:
+        return self._gizmo_pos if self._gizmo_pos is not None else self._pivot()
+
+    def _gizmo_geometry(self, cam: dict):
+        """Screen shapes of the gizmo, sized to stay the same on screen at any
+        distance: the origin, each arrow's tip, and each plane square's corners.
+        Arrows and squares point to the side of each axis that faces the camera."""
+        origin = self._gizmo_origin()
+        o = self._project(cam, origin)
+        if o is None:
+            return None
+        forward = -cam["view"][2, :3]
+        depth = max(float(np.dot(origin - cam["cam_pos"], forward)), 1e-3)
+        world_per_px = 2.0 * math.tan(math.radians(cam["fov"]) / 2.0) * depth / max(self.height(), 1)
+        length = self.GIZMO_ARROW_PX * world_per_px
+        directions = self._gizmo_directions(cam, origin)
+        tips = [self._project(cam, origin + axis * length) for axis in directions]
+        planes = []
+        for a, b in self._GIZMO_PLANES:
+            ua, ub = directions[a], directions[b]
+            lo, hi = self.GIZMO_PLANE_OFFSET * length, (self.GIZMO_PLANE_OFFSET + self.GIZMO_PLANE_SIZE) * length
+            corners = [origin + ua * i + ub * j for i, j in ((lo, lo), (hi, lo), (hi, hi), (lo, hi))]
+            points = [self._project(cam, c) for c in corners]
+            planes.append(None if any(pt is None for pt in points) else QPolygonF(points))
+        return o, tips, planes
+
+    def _gizmo_directions(self, cam: dict, origin: np.ndarray) -> list[np.ndarray]:
+        """Each axis, flipped to point toward the camera's side."""
+        to_camera = cam["cam_pos"] - origin
+        return [axis * (1.0 if axis @ to_camera >= 0 else -1.0) for axis in self._GIZMO_AXES]
+
+    @staticmethod
+    def _polygon_area(poly: QPolygonF) -> float:
+        pts = [poly[i] for i in range(poly.count())]
+        return abs(sum(pts[i].x() * pts[i - 1].y() - pts[i - 1].x() * pts[i].y() for i in range(len(pts)))) / 2.0
+
+    def _gizmo_pick(self, pos: QPointF) -> Optional[int]:
+        cam = self._gizmo_camera or self._camera()
+        geometry = self._gizmo_geometry(cam)
+        if geometry is None:
+            return None
+        o, tips, planes = geometry
+        if math.hypot(pos.x() - o.x(), pos.y() - o.y()) <= self.GIZMO_CENTER_PX:
+            return self._GIZMO_CENTER
+        # Plane squares first: they are small and sit between the arrows.
+        for index, poly in enumerate(planes):
+            if poly is not None and self._polygon_area(poly) > 40.0 and poly.containsPoint(pos, Qt.FillRule.OddEvenFill):
+                return 3 + index
+        best, best_dist = None, self.GIZMO_PICK_PX
+        for index, tip in enumerate(tips):
+            if tip is None:
+                continue
+            seg = np.array([tip.x() - o.x(), tip.y() - o.y()])
+            seg_len2 = float(seg @ seg)
+            if seg_len2 < 100.0:  # pointing at the camera: too short to grab
+                continue
+            rel = np.array([pos.x() - o.x(), pos.y() - o.y()])
+            t = max(0.0, min(1.0, float(rel @ seg) / seg_len2))
+            dist = float(np.linalg.norm(rel - seg * t))
+            if dist < best_dist:
+                best, best_dist = index, dist
+        return best
+
+    def _axis_param(self, cam: dict, pos: QPointF, origin: np.ndarray, axis: np.ndarray) -> Optional[float]:
+        """Where along the axis line through `origin` the mouse ray passes closest."""
+        ray_origin, ray_dir = self._mouse_ray(cam, pos)
+        w0 = origin - ray_origin
+        b = float(axis @ ray_dir)
+        denom = 1.0 - b * b
+        if denom < 1e-4:  # axis almost along the view ray
+            return None
+        d = float(axis @ w0)
+        e = float(ray_dir @ w0)
+        return (b * e - d) / denom
+
+    def _plane_hit(self, cam: dict, pos: QPointF, origin: np.ndarray, normal: np.ndarray) -> Optional[np.ndarray]:
+        """Where the mouse ray meets the plane through `origin`."""
+        ray_origin, ray_dir = self._mouse_ray(cam, pos)
+        facing = float(ray_dir @ normal)
+        if abs(facing) < 1e-3:  # plane seen edge-on
+            return None
+        t = float((origin - ray_origin) @ normal) / facing
+        if t <= 0.0:
+            return None
+        return ray_origin + ray_dir * t
+
+    def _handle_active(self, index: int) -> bool:
+        if self._gizmo_axis is not None:
+            return index == self._gizmo_axis
+        return index == self._gizmo_hover
+
+    def _paint_gizmo(self) -> None:
+        cam = self._gizmo_camera or self._camera()
+        geometry = self._gizmo_geometry(cam)
+        if geometry is None:
+            return
+        o, tips, planes = geometry
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        for index, poly in enumerate(planes):
+            if poly is None:
+                continue
+            handle = 3 + index
+            base = QColor(self._GIZMO_ACTIVE if self._handle_active(handle) else self._GIZMO_COLORS[self._GIZMO_PLANE_NORMAL[index]])
+            edge_on = self._polygon_area(poly) <= 40.0
+            fill, line = QColor(base), QColor(base)
+            fill.setAlphaF(0.12 if edge_on else (0.45 if self._handle_active(handle) else 0.28))
+            line.setAlphaF(0.3 if edge_on else 0.95)
+            painter.setPen(QPen(line, 1.25))
+            painter.setBrush(fill)
+            painter.drawPolygon(poly)
+        # Farther arrows first, so the nearer ones draw over them.
+        forward = -cam["view"][2, :3]
+        directions = self._gizmo_directions(cam, self._gizmo_origin())
+        order = sorted(range(3), key=lambda i: -float(directions[i] @ forward))
+        for index in order:
+            tip = tips[index]
+            if tip is None:
+                continue
+            dx, dy = tip.x() - o.x(), tip.y() - o.y()
+            length = math.hypot(dx, dy)
+            color = QColor(self._GIZMO_ACTIVE if self._handle_active(index) else self._GIZMO_COLORS[index])
+            if length < 10.0:
+                color.setAlphaF(0.35)
+            if length < 1.0:
+                continue
+            ux, uy = dx / length, dy / length
+            head = 11.0
+            base = QPointF(tip.x() - ux * head, tip.y() - uy * head)
+            pen = QPen(color, 2.5)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(pen)
+            painter.drawLine(o, base)
+            path = QPainterPath(tip)
+            path.lineTo(base.x() - uy * 4.5, base.y() + ux * 4.5)
+            path.lineTo(base.x() + uy * 4.5, base.y() - ux * 4.5)
+            path.closeSubpath()
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(color)
+            painter.drawPath(path)
+        center_active = self._gizmo_hover == self._GIZMO_CENTER and self._gizmo_axis is None
+        painter.setPen(QPen(QColor(0, 0, 0, 140), 1.0))
+        painter.setBrush(QColor(self._GIZMO_ACTIVE if center_active else "#f2f2f2"))
+        radius = 4.5 if center_active else 3.5
+        painter.drawEllipse(o, radius, radius)
+        painter.end()
+
+    def _move_pivot_keeping_camera(self, target: np.ndarray) -> None:
+        """Make `target` the pivot without moving the camera: it stays where it
+        is and turns to face the new pivot over a short animation."""
+        cam_pos = self._camera()["cam_pos"]
+        start = self._pivot()
+        if self._pivot_anim is not None:
+            self._pivot_anim.stop()
+
+        def apply(t) -> None:
+            pivot = start + (target - start) * float(t)
+            offset = cam_pos - pivot
+            distance = float(np.linalg.norm(offset))
+            if distance < 1e-4:
+                return
+            self._settings["pivot_x"], self._settings["pivot_y"], self._settings["pivot_z"] = (
+                round(float(c), 3) for c in pivot
+            )
+            self._settings["distance"] = max(0.01, min(20.0, distance))
+            self._elevation = max(-85.0, min(85.0, math.degrees(math.asin(max(-1.0, min(1.0, offset[1] / distance))))))
+            self._azimuth = math.degrees(math.atan2(offset[0], offset[2])) % 360.0
+            self.update()
+
+        def finished() -> None:
+            self._gizmo_pos = None
+            self.pivotChanged.emit(self._settings["pivot_x"], self._settings["pivot_y"], self._settings["pivot_z"])
+            self.distanceChanged.emit(self._settings["distance"])
+            self.update()
+
+        anim = QVariantAnimation(self)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.setDuration(300)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.valueChanged.connect(apply)
+        anim.finished.connect(finished)
+        self._pivot_anim = anim
+        anim.start()
+
     def paintGL(self) -> None:
+        # QPainter (the pivot gizmo) leaves its own GL state behind.
+        gl.glEnable(gl.GL_DEPTH_TEST)
+        gl.glDisable(gl.GL_BLEND)
+        gl.glDisable(gl.GL_SCISSOR_TEST)
+        gl.glDisable(gl.GL_STENCIL_TEST)
         dpr = self.devicePixelRatio()
         gl.glViewport(0, 0, max(1, int(round(self.width() * dpr))), max(1, int(round(self.height() * dpr))))
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
@@ -832,6 +1106,10 @@ class Preview3DWidget(QOpenGLWidget):
             gl.glDrawArrays(gl.GL_LINES, 0, self._grid_vertex_count)
             gl.glBindVertexArray(0)
 
+        if self._gizmo_visible:
+            gl.glUseProgram(0)
+            self._paint_gizmo()
+
     @staticmethod
     def _set_mat4(location: int, mat: np.ndarray) -> None:
         gl.glUniformMatrix4fv(location, 1, gl.GL_FALSE, mat)
@@ -840,8 +1118,80 @@ class Preview3DWidget(QOpenGLWidget):
         self._last_mouse_pos = event.position()
         if event.buttons() & Qt.MouseButton.LeftButton:
             self._is_dragging = True
+            if self._gizmo_visible and self._start_gizmo_drag(event.position()):
+                return
+
+    def _start_gizmo_drag(self, pos: QPointF) -> bool:
+        if self._pivot_anim is not None and self._pivot_anim.state() == QVariantAnimation.State.Running:
+            return False
+        handle = self._gizmo_pick(pos)
+        if handle is None:
+            return False
+        if handle == self._GIZMO_CENTER:
+            # Taken, so it does not turn the camera; a double-click resets it.
+            self._gizmo_center_pressed = True
+            return True
+        cam = self._camera()
+        origin = self._pivot()
+        if handle < 3:
+            t0 = self._axis_param(cam, pos, origin, self._GIZMO_AXES[handle])
+            if t0 is None:
+                return False
+        else:
+            normal = self._GIZMO_AXES[self._GIZMO_PLANE_NORMAL[handle - 3]]
+            self._gizmo_hit0 = self._plane_hit(cam, pos, origin, normal)
+            if self._gizmo_hit0 is None:
+                return False
+            t0 = 0.0
+        self._gizmo_axis = handle
+        self._gizmo_camera = cam  # the camera holds still while the pivot moves
+        self._gizmo_drag_start = origin
+        self._gizmo_drag_t0 = t0
+        self._gizmo_pos = origin.copy()
+        self.update()
+        return True
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if (
+            self._gizmo_visible
+            and event.button() == Qt.MouseButton.LeftButton
+            and self._gizmo_pick(event.position()) == self._GIZMO_CENTER
+        ):
+            self._gizmo_center_pressed = True
+            if float(np.linalg.norm(self._pivot())) > 1e-6:
+                self._move_pivot_keeping_camera(np.zeros(3))
+            return
+        super().mouseDoubleClickEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
+        if getattr(self, "_gizmo_center_pressed", False) and event.buttons() & Qt.MouseButton.LeftButton:
+            return
+        if self._gizmo_axis is not None:
+            handle = self._gizmo_axis
+            if handle < 3:
+                axis = self._GIZMO_AXES[handle]
+                t = self._axis_param(self._gizmo_camera, event.position(), self._gizmo_drag_start, axis)
+                if t is not None:
+                    self._gizmo_pos = np.round(self._gizmo_drag_start + axis * (t - self._gizmo_drag_t0), 3)
+            else:
+                normal = self._GIZMO_AXES[self._GIZMO_PLANE_NORMAL[handle - 3]]
+                hit = self._plane_hit(self._gizmo_camera, event.position(), self._gizmo_drag_start, normal)
+                if hit is not None:
+                    delta = hit - self._gizmo_hit0
+                    delta -= normal * float(delta @ normal)  # stay exactly in the plane
+                    # Near the horizon a small mouse move would throw the point far away.
+                    reach = float(np.linalg.norm(delta))
+                    if reach > 10.0:
+                        delta *= 10.0 / reach
+                    self._gizmo_pos = np.round(self._gizmo_drag_start + delta, 3)
+            self.update()
+            return
+        if self._gizmo_visible and not (event.buttons() & Qt.MouseButton.LeftButton):
+            hover = self._gizmo_pick(event.position())
+            if hover != self._gizmo_hover:
+                self._gizmo_hover = hover
+                self.update()
+            return
         if self._last_mouse_pos is None or not (event.buttons() & Qt.MouseButton.LeftButton):
             return
         pos = event.position()
@@ -901,6 +1251,23 @@ class Preview3DWidget(QOpenGLWidget):
     def mouseReleaseEvent(self, event) -> None:
         self._last_mouse_pos = None
         self._is_dragging = False
+        self._gizmo_center_pressed = False
+        if self._gizmo_axis is not None:
+            target = self._gizmo_pos
+            self._gizmo_axis = None
+            self._gizmo_camera = None
+            self._gizmo_hover = self._gizmo_pick(event.position())
+            if target is not None and float(np.linalg.norm(target - self._pivot())) > 1e-6:
+                self._move_pivot_keeping_camera(target)
+            else:
+                self._gizmo_pos = None
+                self.update()
+
+    def leaveEvent(self, event) -> None:
+        if self._gizmo_hover is not None:
+            self._gizmo_hover = None
+            self.update()
+        super().leaveEvent(event)
 
     def wheelEvent(self, event) -> None:
         if trackpad.is_trackpad_scroll(event):

@@ -823,18 +823,27 @@ class MainWindow(QMainWindow):
         return header
 
     def _update_next_step_pulse(self) -> None:
-        """An empty project points at the map to create first: the Albedo slot
-        breathes softly until an albedo image is imported."""
+        """An empty project points at the first step until an albedo image is
+        in: the Import button while the Albedo slot is selected, otherwise the
+        Albedo slot."""
         btn = self._slot_buttons.get(MapType.ALBEDO)
-        if btn is None:
+        if btn is None or not hasattr(self, "upload_btn"):
             return
         if getattr(self, "_next_step_pulse", None) is None:
             self._next_step_pulse = PulseGlow(btn, self._accent_qcolor(), host=self._slot_strip)
-            theme_changed.connect(lambda: self._next_step_pulse.set_color(self._accent_qcolor()))
-        if MapType.ALBEDO in self.source_images or self.generated_images:
-            self._next_step_pulse.stop()
-        else:
-            self._next_step_pulse.start()
+            # Flush with the slot's edge, over its own border.
+            self._next_step_pulse.set_gap(-PulseGlow.RING_WIDTH)
+            self._import_pulse = PulseGlow(self.upload_btn, self._accent_qcolor(), host=self.selected_map_preview)
+            self._import_pulse.set_radius(3.5)
+            self._import_pulse.set_gap(1.0)
+            theme_changed.connect(
+                lambda: [pulse.set_color(self._accent_qcolor()) for pulse in (self._next_step_pulse, self._import_pulse)]
+            )
+        empty = MapType.ALBEDO not in self.source_images and not self.generated_images
+        import_next = empty and self.current_map_type == MapType.ALBEDO
+        slot_next = empty and not import_next
+        self._next_step_pulse.start() if slot_next else self._next_step_pulse.stop()
+        self._import_pulse.start() if import_next else self._import_pulse.stop()
 
     def _accent_qcolor(self):
         from PyQt6.QtGui import QColor
@@ -1047,6 +1056,18 @@ class MainWindow(QMainWindow):
         self.preview_3d.set_preview_settings(self.preview_properties_panel.get_settings())
         panel_layout.addWidget(self.preview_properties_panel, 1)
 
+        # Floating button at the View Options panel's bottom right: shows the
+        # arrows that move the camera pivot in the 3D view.
+        gizmo_btn = QToolButton(viewport)
+        gizmo_btn.setObjectName("PivotGizmoButton")
+        gizmo_btn.setCheckable(True)
+        gizmo_btn.setIconSize(QSize(18, 18))
+        gizmo_btn.setToolTip("<b>Move Pivot</b><br>Show arrows to drag the point the camera turns around.")
+        gizmo_btn.setAccessibleName("Move Pivot")
+        gizmo_btn.toggled.connect(self.preview_3d.set_pivot_gizmo_visible)
+        gizmo_btn.toggled.connect(lambda _on: self.preview_3d.setFocus())
+        self._pivot_gizmo_btn = gizmo_btn
+
         self._style_view_options_panel()
         theme_changed.connect(self._style_view_options_panel)
         viewport.installEventFilter(self)
@@ -1118,6 +1139,29 @@ class MainWindow(QMainWindow):
 
     def _style_view_options_panel(self) -> None:
         background, edge = self._floating_surface()
+        btn = getattr(self, "_pivot_gizmo_btn", None)
+        if btn is not None:
+            accent = self._accent_qcolor()
+            base = QColor(*(int(v) for v in background[background.index("(") + 1:].split(",")[:3]))
+            light = QColor(255, 255, 255)
+
+            def mix(color: QColor, amount: float) -> str:
+                # Blended into the panel colour first, so every state keeps the
+                # panel's own opacity instead of turning see-through.
+                r = round(base.red() + (color.red() - base.red()) * amount)
+                g = round(base.green() + (color.green() - base.green()) * amount)
+                b = round(base.blue() + (color.blue() - base.blue()) * amount)
+                return f"rgba({r}, {g}, {b}, 0.93)"
+
+            on_edge = f"rgba({accent.red()}, {accent.green()}, {accent.blue()}, 0.8)"
+            btn.setIcon(subtle_icon("camera"))
+            btn.setStyleSheet(
+                f"QToolButton#PivotGizmoButton {{ background-color: {background}; border: 1px solid {edge};"
+                " border-radius: 10px; padding: 0px; }"
+                f" QToolButton#PivotGizmoButton:hover {{ background-color: {mix(light, 0.08)}; }}"
+                f" QToolButton#PivotGizmoButton:checked {{ background-color: {mix(accent, 0.32)}; border-color: {on_edge}; }}"
+                f" QToolButton#PivotGizmoButton:checked:hover {{ background-color: {mix(accent, 0.42)}; }}"
+            )
         self._view_options_panel.setStyleSheet(
             "QFrame#FloatingViewOptions {"
             f" background-color: {background};"
@@ -1148,6 +1192,12 @@ class MainWindow(QMainWindow):
             height = min(heading_height, max_height)
         panel.setGeometry(margin, viewport.height() - margin - height, width, height)
         panel.raise_()
+        btn = getattr(self, "_pivot_gizmo_btn", None)
+        if btn is not None:
+            size = heading_height
+            btn.setFixedSize(size, size)
+            btn.move(panel.x() + panel.width() + 8, viewport.height() - margin - size)
+            btn.raise_()
 
     def eventFilter(self, obj, event) -> bool:
         if obj is getattr(self, "selected_map_preview", None) and event.type() == QEvent.Type.Resize:

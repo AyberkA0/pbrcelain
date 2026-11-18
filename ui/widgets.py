@@ -209,9 +209,12 @@ class FoldArrow(QWidget):
 
 
 class _Halo(QWidget):
-    """Paints a soft rounded glow; sits behind the widget it highlights."""
+    """Paints a thin ring just outside the widget it highlights, like a focus
+    ring: crisp, no blur."""
 
-    SPREAD = 16
+    GAP = 2      # between the widget's edge and the ring
+    WIDTH = 2.0  # ring thickness
+    SPREAD = 5   # room the ring needs around the widget (GAP + WIDTH + 1)
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -221,40 +224,34 @@ class _Halo(QWidget):
         self.color = QColor("#4a72d9")
         self.strength = 0.0
         self.radius = 9.0
+        self.gap = float(self.GAP)
 
     def paintEvent(self, event) -> None:
-        from PyQt6.QtGui import QColor
+        from PyQt6.QtGui import QColor, QPen
 
         if self.strength <= 0.0:
             return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(Qt.PenStyle.NoPen)
-        steps = self.SPREAD
-        inner = QRectF(self.rect()).adjusted(steps, steps, -steps, -steps)
-        hole = QPainterPath()
-        hole.addRoundedRect(inner, self.radius, self.radius)
-        painter.setClipPath(self._outside(hole))
-        for i in range(steps, 0, -1):
-            k = 1.0 - i / (steps + 1)
-            color = QColor(self.color)
-            color.setAlphaF(min(1.0, self.strength * 0.16 * k * k))
-            painter.setBrush(color)
-            painter.drawRoundedRect(inner.adjusted(-i, -i, i, i), self.radius + i, self.radius + i)
+        color = QColor(self.color)
+        color.setAlphaF(min(1.0, self.strength))
+        painter.setPen(QPen(color, self.WIDTH))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        inset = self.SPREAD - self.gap - self.WIDTH / 2
+        ring = QRectF(self.rect()).adjusted(inset, inset, -inset, -inset)
+        r = max(1.0, self.radius + self.gap + self.WIDTH / 2)
+        painter.drawRoundedRect(ring, r, r)
         painter.end()
-
-    def _outside(self, hole):
-        whole = QPainterPath()
-        whole.addRect(QRectF(self.rect()))
-        return whole.subtracted(hole)
 
 
 class PulseGlow:
-    """A soft glow that slowly breathes around a widget, used to point at the
-    next step (e.g. the Albedo slot of an empty project). The glow is painted
-    on `host` behind the widget so neighbouring layout margins do not clip it."""
+    """A thin ring that slowly fades in and out around a widget, used to point
+    at the next step (e.g. the Albedo slot of an empty project). It is painted
+    on `host` so neighbouring layout margins do not clip it."""
 
-    def __init__(self, widget, color, host=None, period_ms: int = 1200):
+    RING_WIDTH = _Halo.WIDTH
+
+    def __init__(self, widget, color, host=None, period_ms: int = 1800):
         from PyQt6.QtCore import QEasingCurve, QVariantAnimation
 
         self._widget = widget
@@ -275,7 +272,19 @@ class PulseGlow:
     def set_color(self, color) -> None:
         from PyQt6.QtGui import QColor
 
-        self._halo.color = QColor(color).lighter(130)
+        self._halo.color = QColor(color)
+        self._halo.update()
+
+    def set_radius(self, radius: float) -> None:
+        """Corner radius of the widget, so the ring follows its corners."""
+        self._halo.radius = radius
+        self._halo.update()
+
+    def set_gap(self, gap: float) -> None:
+        """Distance of the ring's inner edge from the widget's edge:
+        positive puts the ring outside the widget, -RING_WIDTH puts it just
+        inside, flush with the edge."""
+        self._halo.gap = gap
         self._halo.update()
 
     def is_running(self) -> bool:
@@ -303,6 +312,6 @@ class PulseGlow:
         top_left = self._widget.mapTo(self._host, QPoint(0, 0))
         spread = _Halo.SPREAD
         self._halo.setGeometry(QRect(top_left, self._widget.size()).adjusted(-spread, -spread, spread, spread))
-        self._halo.stackUnder(self._widget) if self._widget.parentWidget() is self._host else self._halo.lower()
-        self._halo.strength = 0.35 + 0.65 * float(value)
+        self._halo.raise_()
+        self._halo.strength = 0.25 + 0.75 * float(value)
         self._halo.update()
