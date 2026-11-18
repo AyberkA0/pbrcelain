@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QLibraryInfo, QVersionNumber, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -230,7 +230,18 @@ class PreviewPropertiesPanel(QWidget):
             attach_scrub(axis_label, spin)
             # No arrows: three spin boxes share one row, and the arrows would leave
             # too little room for the value. Drag the axis letter or type instead.
-            spin.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
+            # The arrows are hidden by giving them no width. Turning them off with
+            # setButtonSymbols(NoButtons) instead squeezes the text field to 1 px
+            # under the theme's stylesheet in Qt 6.12.
+            spin.setStyleSheet(
+                "QDoubleSpinBox { padding-right: 6px; }"
+                " QDoubleSpinBox::up-button, QDoubleSpinBox::down-button"
+                " { width: 0px; border: none; background: transparent; image: none; }"
+                " QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow { width: 0px; height: 0px; image: none; }"
+            )
+            if QLibraryInfo.version() >= QVersionNumber(6, 12):
+                # 6.12 also drops the theme's left padding in this case.
+                spin.lineEdit().setTextMargins(6, 0, 0, 0)
             spin.setMinimumWidth(48)
             pivot_layout.addWidget(axis_label)
             pivot_layout.addWidget(spin, 1)
