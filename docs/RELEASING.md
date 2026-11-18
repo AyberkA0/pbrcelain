@@ -6,22 +6,26 @@ bundle, the Windows `.exe` properties and the AI runtime pack all read it there.
 
 1. Bump `VERSION` in `core/version.py` and add a section to `CHANGELOG.md`.
 2. Commit and push.
-3. Build on each platform with its build environment (see below):
+3. Run the **Release builds** workflow on GitHub Actions and download its two
+   artifacts (`release-macOS`, `release-Windows`):
 
    ```bash
-   python build_release.py
+   gh workflow run release.yml --ref main
+   gh run download <run id> -D release
    ```
 
-   This writes the app (`PBRCELAIN-<version>-macOS-AppleSilicon.dmg` or
-   `PBRCELAIN-<version>-Windows-x64-Setup.exe`) and that platform's AI runtime pack
-   into `release/`. The pack's download URL points at the `v<version>` release,
-   so the version must not change between building and publishing.
+   They hold the app (`PBRCELAIN-<version>-macOS-AppleSilicon.dmg`,
+   `PBRCELAIN-<version>-Windows-x64-Setup.exe`) and each platform's AI runtime
+   pack. The packs' download URLs point at the `v<version>` release, so the
+   version must not change between building and publishing. (`python
+   build_release.py` makes the same files on a local machine, but only CI builds
+   can be code signed.)
 
-4. Create the release from the macOS files, then add the Windows files:
+4. Tag the commit that was built, and create the release with all four files:
 
    ```bash
-   gh release create v<version> release/* --title "PBRCELAIN <version>" --notes-file <notes>
-   gh release upload v<version> <the Windows files>
+   git tag -a v<version> -m "PBRCELAIN <version>" <commit> && git push origin v<version>
+   gh release create v<version> release/*/* --title "PBRCELAIN <version>" --notes-file <notes>
    ```
 
    The notes are `.github/release-notes.md` with `{version}` and `{changes}`

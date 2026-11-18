@@ -5,5 +5,5 @@ the AI runtime pack and the CLI all read it from here, and a release is
 tagged v<VERSION>. Bump it (and add a CHANGELOG.md entry) before a release.
 """
 
-VERSION = "0.67.0"
+VERSION = "0.68.0"
 TAG = f"v{VERSION}"
