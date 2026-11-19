@@ -11,7 +11,8 @@ import numpy as np
 from PIL import Image
 
 from core.depth_models import DepthResult
-from core.maps import MapType
+from core.image_modes import prepare_source
+from core.maps import GRAY_SOURCE_MAPS, MapType
 
 PROJECT_VERSION = 1
 PROJECT_EXTENSION = ".pcln"
@@ -56,9 +57,6 @@ def _encode_image(image: Image.Image) -> tuple[bytes, bool]:
     is_float = image.mode == "F"
     image.save(buf, format="TIFF" if is_float else "PNG")
     return buf.getvalue(), is_float
-
-
-_PRESERVED_SOURCE_MODES = ("L", "I;16", "I")
 
 
 def save_project(
@@ -160,8 +158,9 @@ def load_project(
                     progress_cb(f"Loading {map_type.value.capitalize()} source…")
                 img = Image.open(BytesIO(zf.read(src_name)))
                 img.load()
-                if img.mode not in _PRESERVED_SOURCE_MODES:
-                    img = img.convert("RGB")
+                # Same rule as loading the image into the slot; older files may hold
+                # 32-bit "I" greyscale, which becomes I;16 here.
+                img = prepare_source(img, keep_gray=map_type in GRAY_SOURCE_MAPS)
                 source_images[map_type] = img
             cache_name = next(
                 (n for n in (_slot_cache_name(map_type), _slot_cache_name(map_type, float32=True)) if n in names),

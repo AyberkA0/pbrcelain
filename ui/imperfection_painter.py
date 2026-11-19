@@ -34,6 +34,7 @@ import numpy as np
 
 from ui import trackpad
 from ui.theme import legacy_style, pick
+from core.image_modes import to_gray8
 from core.imgops import resize
 
 _CARD_STYLE = "QFrame#PainterCard { background-color: #323232; border: 1px solid #202020; border-radius: 3px; padding: 6px; }"
@@ -106,7 +107,7 @@ class ImperfectionCanvasWidget(QWidget):
             self._underlays["normal"] = QPixmap.fromImage(qimg.copy())
 
         if roughness is not None:
-            rough_thumb = roughness.convert("L").resize((self.canvas_w, self.canvas_h), Image.Resampling.BILINEAR)
+            rough_thumb = to_gray8(roughness).resize((self.canvas_w, self.canvas_h), Image.Resampling.BILINEAR)
             arr = np.ascontiguousarray(np.asarray(rough_thumb, dtype=np.uint8))
             qimg = QImage(arr.data, self.canvas_w, self.canvas_h, self.canvas_w, QImage.Format.Format_Grayscale8)
             self._underlays["roughness"] = QPixmap.fromImage(qimg.copy())

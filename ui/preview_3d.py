@@ -11,6 +11,7 @@ from PyQt6.QtCore import QEasingCurve, QPointF, QTimer, QVariantAnimation, Qt, p
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen, QPolygonF, QSurfaceFormat
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
+from core.image_modes import to_gray8 as _to_gray8
 from ui import trackpad
 
 SKY_GLSL = """
@@ -481,19 +482,12 @@ class Preview3DWidget(QOpenGLWidget):
             changed.add("normal")
         if roughness is not self._roughness_source:
             self._roughness_source = roughness
-            self._roughness_image = roughness.convert("L") if roughness is not None else None
+            self._roughness_image = _to_gray8(roughness) if roughness is not None else None
             changed.add("roughness")
         if height is not self._height_source:
             self._height_source = height
             if height is not None:
-                if height.mode in ("I;16", "I"):
-                    arr = (np.asarray(height, dtype=np.float32) / 256.0).clip(0, 255).astype(np.uint8)
-                    self._height_image = Image.fromarray(arr, mode="L")
-                elif height.mode == "F":
-                    arr = (np.asarray(height, dtype=np.float32) * 255.0).clip(0, 255).astype(np.uint8)
-                    self._height_image = Image.fromarray(arr, mode="L")
-                else:
-                    self._height_image = height.convert("L")
+                self._height_image = _to_gray8(height)
                 self._height_ref = float(np.asarray(self._height_image, dtype=np.float32).mean() / 255.0)
             else:
                 self._height_image = None
@@ -501,7 +495,9 @@ class Preview3DWidget(QOpenGLWidget):
             changed.add("height")
         if ao is not self._ao_source:
             self._ao_source = ao
-            self._ao_image = ao.convert("L") if ao is not None else None
+            # A saved AO map is 16-bit (the panel's bit depth) while drafts are 8-bit; a plain
+            # convert("L") clips 16-bit values to white, which made AO vanish from the view after Save.
+            self._ao_image = _to_gray8(ao) if ao is not None else None
             changed.add("ao")
 
         self._texture_upload_needed.update(changed)

@@ -27,6 +27,9 @@ MAP_TYPE_LABELS: dict[MapType, str] = {
     MapType.AO: "Ambient Occlusion",
 }
 
+# Slots whose loaded image is kept as greyscale (8- or 16-bit) instead of being turned into RGB.
+GRAY_SOURCE_MAPS: tuple[MapType, ...] = (MapType.HEIGHT, MapType.ROUGHNESS)
+
 GENERATABLE_MAP_TYPES: set[MapType] = {
     MapType.ALBEDO,
     MapType.HEIGHT,

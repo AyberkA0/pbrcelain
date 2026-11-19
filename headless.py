@@ -228,6 +228,7 @@ def cmd_generate(args) -> dict:
     from core.normal_map import to_image as normal_to_image
     from core.roughness_map import generate_roughness_map
     from core.roughness_map import to_image as roughness_to_image
+    from core.image_modes import to_rgb8, to_unit_array
 
     _app, panels = _panels()
     if args.settings:
@@ -237,7 +238,7 @@ def cmd_generate(args) -> dict:
     try:
         albedo_src = Image.open(args.albedo)
         albedo_src.load()
-        albedo_src = albedo_src.convert("RGB")
+        albedo_src = to_rgb8(albedo_src)   # scales a 16-bit or float greyscale photo instead of clipping it
     except Exception as exc:
         raise CliError(f"Could not read the albedo image: {exc}") from None
 
@@ -268,12 +269,7 @@ def cmd_generate(args) -> dict:
                 img.load()
             except Exception as exc:
                 raise CliError(f"Could not read the height image: {exc}") from None
-            if img.mode in ("I;16", "I"):
-                height_arr = np.asarray(img, dtype=np.float32) / 65535.0
-            elif img.mode == "F":
-                height_arr = np.asarray(img, dtype=np.float32).clip(0.0, 1.0)
-            else:
-                height_arr = np.asarray(img.convert("L"), dtype=np.float32) / 255.0
+            height_arr = to_unit_array(img)
             info["height_source"] = os.path.abspath(args.height)
         else:
             result, model_info = _estimate_depth(albedo, panels, args)

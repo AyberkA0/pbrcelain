@@ -39,7 +39,8 @@ from core.height_map import (
     downsample_for_preview,
 )
 from core.height_map import to_image as height_map_to_image
-from core.maps import MAP_TYPE_LABELS, MAP_TYPE_ORDER, MapType
+from core.image_modes import prepare_source, to_gray8, to_unit_array
+from core.maps import GRAY_SOURCE_MAPS, MAP_TYPE_LABELS, MAP_TYPE_ORDER, MapType
 from core.normal_map import generate_normal_map
 from core.normal_map import to_image as normal_map_to_image
 from core.project import PROJECT_EXTENSION, PROJECT_FILE_FILTER, MapSlotData, ProjectData, is_project_path
@@ -81,27 +82,15 @@ def pil_to_qpixmap(img: Image.Image) -> QPixmap:
     if img.mode == "RGB":
         data = img.tobytes("raw", "RGB")
         qimg = QImage(data, img.width, img.height, img.width * 3, QImage.Format.Format_RGB888)
-    elif img.mode in ("I;16", "I"):
-        arr = (np.asarray(img, dtype=np.float32) / 256.0).clip(0, 255).astype(np.uint8)
-        data = arr.tobytes()
-        qimg = QImage(data, img.width, img.height, img.width, QImage.Format.Format_Grayscale8)
-    elif img.mode == "F":
-        arr = (np.asarray(img, dtype=np.float32) * 255.0).clip(0, 255).astype(np.uint8)
-        data = arr.tobytes()
-        qimg = QImage(data, img.width, img.height, img.width, QImage.Format.Format_Grayscale8)
     else:
-        img = img.convert("L")
+        img = to_gray8(img)
         data = img.tobytes("raw", "L")
         qimg = QImage(data, img.width, img.height, img.width, QImage.Format.Format_Grayscale8)
     return QPixmap.fromImage(qimg.copy())
 
 
 def _image_to_height_array(image: Image.Image) -> np.ndarray:
-    if image.mode in ("I;16", "I"):
-        return np.asarray(image, dtype=np.float32) / 65535.0
-    if image.mode == "F":
-        return np.asarray(image, dtype=np.float32).clip(0.0, 1.0)
-    return np.asarray(image.convert("L"), dtype=np.float32) / 255.0
+    return to_unit_array(image)
 
 
 def _image_to_normal_array(image: Image.Image) -> np.ndarray:
@@ -1379,10 +1368,9 @@ class MainWindow(QMainWindow):
         try:
             image = Image.open(path)
             image.load()
-            if map_type in (MapType.HEIGHT, MapType.ROUGHNESS) and image.mode in ("I;16", "I", "L"):
-                pass
-            else:
-                image = image.convert("RGB")
+            # Scales 16-bit and float images instead of clipping them (a plain convert() turns
+            # a 16-bit image white and a float one black); greyscale slots stay 8- or 16-bit.
+            image = prepare_source(image, keep_gray=map_type in GRAY_SOURCE_MAPS)
         except Exception as exc:
             QMessageBox.critical(self, "Failed to load image", str(exc))
             return

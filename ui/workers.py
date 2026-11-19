@@ -5,6 +5,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from PIL import Image
 
 from core.depth_models import DepthEstimator, InferenceCancelled
+from core.image_modes import is_wide_gray, to_unit_array
 from core.height_map import apply_seamless_linear_mask, build_height_map, downsample_for_preview
 from core.height_map import to_image as height_map_to_image
 from core.normal_map import generate_normal_map
@@ -153,10 +154,8 @@ class PropertiesPreviewWorker(QThread):
 
     @staticmethod
     def _height_array(image: Image.Image) -> np.ndarray:
-        if image.mode == "I;16":
-            return downsample_for_preview(np.asarray(image, dtype=np.float32) / 65535.0)
-        if image.mode == "F":
-            return downsample_for_preview(np.asarray(image, dtype=np.float32).clip(0.0, 1.0))
+        if is_wide_gray(image):
+            return downsample_for_preview(to_unit_array(image))
         return PropertiesPreviewWorker._image_array(image, "L")
 
     def _scale_downstream(self, scale: float) -> None:
@@ -173,12 +172,7 @@ class PropertiesPreviewWorker(QThread):
         key = (id(self.height_image), occlusion_key(self.ao_options))
         if _AO_CACHE is None or _AO_CACHE[0] != key:
             img = self.height_image
-            if img.mode in ("I;16", "I"):
-                arr = np.asarray(img, dtype=np.float32) / 65535.0
-            elif img.mode == "F":
-                arr = np.asarray(img, dtype=np.float32).clip(0.0, 1.0)
-            else:
-                arr = np.asarray(img.convert("L"), dtype=np.float32) / 255.0
+            arr = to_unit_array(img)
             # Holding the image keeps its id() from being reused by another one.
             _AO_CACHE = (key, img, occlusion_map(arr, self.ao_options))
         result = ao_to_image(finish_ao(_AO_CACHE[2], self.ao_options), bit_depth=8)

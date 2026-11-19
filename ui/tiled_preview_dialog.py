@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.image_modes import is_wide_gray, to_rgb8
 from ui import trackpad
 from ui.theme import PLATFORM_THEME, legacy_style
 
@@ -45,12 +46,8 @@ class InteractiveTiledCanvas(QWidget):
 
     def set_source_image(self, image: Image.Image | QPixmap | np.ndarray, tile_count: int = 2) -> None:
         if isinstance(image, Image.Image):
-            if image.mode in ("I;16", "I"):
-                arr = (np.asarray(image, dtype=np.float32) / 256.0).clip(0, 255).astype(np.uint8)
-                pil_img = Image.fromarray(arr, mode="L").convert("RGB")
-            elif image.mode == "F":
-                arr = (np.asarray(image, dtype=np.float32) * 255.0).clip(0, 255).astype(np.uint8)
-                pil_img = Image.fromarray(arr, mode="L").convert("RGB")
+            if is_wide_gray(image):
+                pil_img = to_rgb8(image)
             elif "A" in image.mode:
                 pil_img = image.convert("RGBA")
             elif image.mode == "L":
