@@ -33,6 +33,8 @@ needs: **Height, Normal, Roughness and Ambient Occlusion**. An AI depth model
 estimates the relief from the photo, the other maps are built from it, and you see
 the result live on a 3D preview.
 
+https://github.com/user-attachments/assets/ccbf458e-5fbc-4bad-85d3-8ebc7d6a2fc8
+
 ## Showcase
 
 Materials generated from single photos, previewed in the built-in 3D viewport.
