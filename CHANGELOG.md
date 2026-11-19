@@ -3,6 +3,18 @@
 PBRCELAIN uses [semantic versioning](https://semver.org): MAJOR.MINOR.PATCH.
 The version is set in `core/version.py` and each release is tagged `v<version>`.
 
+## 0.68.1 (2026-11-19)
+
+- Ambient Occlusion no longer disappears from the 3D view after you save its
+  adjustments or reopen a project.
+- 16-bit and 32-bit (float) images now load correctly: 16-bit TIFFs saved on a
+  Mac no longer turn white, float TIFFs no longer turn black, and a 16-bit image
+  in the Albedo, Normal or AO slot keeps its tones.
+- A new window opens at 1012 x 601.
+- macOS: in full screen the title bar icons sit at the left edge.
+- The camera pivot fields stay readable with Qt 6.12.
+- Windows: uninstalling no longer leaves an empty `.pcln` registry key behind.
+
 ## 0.68.0 (2026-11-18)
 
 - Move the camera pivot right in the 3D view: the camera button next to View
